@@ -9,8 +9,6 @@ import struct
 import sys
 import time
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build/python-dependencies"))
-
 import capnp
 import msgpack
 
@@ -191,7 +189,8 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8032)
     parser.add_argument("--market-port", type=int, default=8033)
     parser.add_argument("--token", required=True, help="Order-entry token shown in Titan Profile configuration")
-    parser.add_argument("--schemas", type=Path, required=False, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--schemas", type=Path, default=Path(__file__).resolve().parent,
+                        help="Schema directory (default: the directory containing this script)")
     parser.add_argument("--timeout", type=float, default=30)
     args = parser.parse_args()
     try:

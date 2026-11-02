@@ -1,1 +1,2 @@
 msgpack==1.0.3
+pycapnp==2.0.0
