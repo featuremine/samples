@@ -12,6 +12,6 @@ $C.fieldgetset;
 
 const schemasVersionMajor :UInt16 = 1;
 const schemasVersionMinor :UInt16 = 0;
-const schemasVersionPatch :UInt16 = 10;
+const schemasVersionPatch :UInt16 = 11;
 
-const schemasVersion :Text = "1.0.10";
+const schemasVersion :Text = "1.0.11";
