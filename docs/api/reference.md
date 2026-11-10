@@ -20,9 +20,12 @@ Authorization: <TOKEN>
 ```
 
 No `Bearer ` prefix is added. Missing or unknown tokens return HTTP 400.
-Titan's **Client name** defaults to `client`; the profile tokens map to that
-name. The same name is written to `Account.client` and used as the first venue's
-strategy name for order routing.
+Titan maps the profile tokens to the first configured account's **Account name**. Each
+account's `Account.client` is seeded from its own name, so only accounts whose
+names match the first account are in that token's scope. The first account's
+name is also the strategy identity used for order routing and all fill models.
+New profiles start with a first account named `client`; saved names are used as entered.
+Renaming an account changes its ownership and requires a new Titan session.
 
 Titan serves plain HTTP. Use HTTPS through a TLS endpoint when configured.
 

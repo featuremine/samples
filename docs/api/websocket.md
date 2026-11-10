@@ -28,10 +28,11 @@ The WebSocket upgrade and reference REST requests use the token as the entire
 currently does not authenticate requests. The sample sends its token on price
 requests too, but this does not restrict access to prices.
 
-Titan's **Client name** defaults to `client`. It is used for both the accounts'
-`client` field and the first venue's strategy name in the order route. Titan
-maps the token to that account scope and route; clients must use identifiers
-discovered from the running session.
+Titan derives the connection's client/strategy identity from the first
+configured account's **Account name**, and uses it for all fill models. Each account's
+`client` field comes from its own name. The profile token therefore exposes
+accounts whose names match the first account's name; differently named accounts
+are outside its scope. Use the identifiers discovered from the running session.
 
 ## Integration Stages
 

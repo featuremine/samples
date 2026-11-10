@@ -71,6 +71,12 @@ by channel. Risk-channel records link security identifiers to those channels.
 It waits for both advertised recovery counts before selecting its order batch.
 Historical replies are consumed before new orders are submitted.
 
+The first configured account's **Account name** supplies the connection's client and
+strategy identity. Each account's `Account.client` comes from its own name, so
+the order-entry token exposes only accounts whose names match the first
+account. New profiles start with a first account named `client`; saved names
+are used as entered. Renaming an account requires a new session.
+
 The sample sends transport heartbeats every ten seconds on both connections,
 including while waiting for reference data and prices.
 

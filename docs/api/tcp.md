@@ -26,11 +26,13 @@ Each connection starts with a binary token-and-version handshake. Use the
 profile token as its 256 token bytes; this is not an HTTP `Authorization`
 header. The bundled TCP client has no TLS option.
 
-Titan's **Client name** defaults to `client`. It is the first venue's strategy
-name and is also written to the accounts' `client` field. Carnitas uses this
-same name for account filtering and for the order route together with the OMS
-name. Clients select the route through their token, not through a field in each
-TCP frame.
+Titan derives the connection's client/strategy identity from the first
+configured account's **Account name**. Each account's `client` field comes from that
+account's own name. Carnitas uses the connection identity for account filtering
+and for the order route together with the OMS name, so accounts with different
+names are outside the order-entry token's scope. The same strategy identity is
+used by all fill models. Clients select the route through their token, not
+through a field in each TCP frame.
 
 ## Integration Stages
 

@@ -53,9 +53,13 @@ These provide `pycapnp` for messages, `msgpack` for TCP price updates, and
 3. Check the connect host and service ports in **Connections**.
 4. Start the session and keep it running while running a sample.
 
-The default connect host is `localhost`. The **Client name** defaults to
-`client`. The same name identifies the accounts visible to the strategy and
-the strategy in the first venue's order route.
+The default connect host is `localhost`. In **Accounts**, the first account's
+**Account name** supplies the connection's client/strategy identity. New profiles
+start with a first account named `client`; saved names are used as entered. Each account's
+`Account.client` is seeded from its own name. The order-entry token exposes
+accounts whose names match the first account's name; differently named accounts
+are outside that token's scope. Renaming an account changes its ownership and
+requires a new session.
 
 | Service | Default port | Sample |
 | --- | --- | --- |

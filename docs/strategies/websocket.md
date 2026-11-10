@@ -79,9 +79,12 @@ Reference discovery reads `/securities`, `/accounts`, `/venueAccountMappings`,
 `POST /api/prices` for ask field `25` and ask-quantity field `735`. The sample
 accepts numeric or decimal-string identifiers from the reference API.
 
-Titan's **Client name** defaults to `client`. The same name determines which
-accounts are visible and identifies the strategy in the first venue's order
-channels.
+The first configured account's **Account name** supplies the connection's client and
+strategy identity. Each seeded account's `Account.client` comes from that
+account's own name.
+Only accounts whose names match the first account are visible through the
+profile token. New profiles start with a first account named `client`; saved
+names are used as entered. An account rename requires a new session.
 
 ## Recovery and timeouts
 
@@ -113,8 +116,9 @@ The shared order-selection rules and expected output are in the
   token from the running session. Reference and WebSocket authentication status
   codes are documented in their respective APIs.
 - If reference discovery is empty, check that the accounts' `client` assignment
-  matches **Client name**, then check account-to-venue mappings and
-  security-to-venue attributes.
+  matches the first account's **Account name**, then check account-to-venue mappings and
+  security-to-venue attributes. Differently named accounts are outside the
+  profile token's scope.
 - If no orders are placed, check that the price service returns positive,
   finite ask prices and ask quantities for eligible securities.
 - For REST errors other than the retried 503 status, see the
