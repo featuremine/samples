@@ -1,25 +1,27 @@
 # Titan samples
 
-This repository contains samples for working with Titan. The TCP strategy is in
-the repository's main directory, alongside its requirements and Cap'n Proto
-schemas.
+This repository contains Python strategies for a running Titan session:
 
-## TCP strategy
+- [TCP strategy](tcp-strategy.py): reference data, prices, and orders through
+  Carnitas TCP connections.
+- [WebSocket strategy](ws-strategy.py): orders through the WebSocket syncer,
+  with reference data and prices through REST services.
 
-The sample connects to a running Titan session through its Carnitas TCP services.
-It reads reference data and live prices, then submits one batch of simulated
-immediate-or-cancel (IOC) limit buy orders. Each order uses the current ask price
-and a quantity of up to one unit for an eligible account, security, and venue.
-The script exits when it receives a fill, cancellation, or rejection for every
-order.
+Both samples discover eligible accounts, securities, and venues, submit one
+batch of simulated IOC limit buy orders, and wait for terminal responses.
+Each order uses the current ask price (field `25`) and the smaller of the ask
+quantity (field `735`) and one unit, with the DMA algorithm. Orders follow sorted
+security/venue pairs and ascending account identifiers. Positions are loaded
+but do not affect order selection.
+The scripts, [requirements](requirements.txt), and Cap'n Proto schemas are in
+the repository root.
 
-### Install requirements
+## Set up Python
 
-You need Python 3 with `pip` and `venv`, and the Titan desktop application.
-Open a terminal in this repository's main directory and create a virtual
-environment.
+Use Python 3.9 or newer with `pip` and `venv`. Run these commands from the
+repository root, where both strategy scripts and `requirements.txt` are located.
 
-On macOS or Linux:
+Create and activate a virtual environment on macOS or Linux:
 
 ```sh
 python3 -m venv fm-venv
@@ -33,68 +35,62 @@ py -3 -m venv fm-venv
 fm-venv\Scripts\Activate.ps1
 ```
 
-With the virtual environment active, install the dependencies:
+Install the shared requirements:
 
 ```sh
 python -m pip install -r requirements.txt
 ```
 
-This installs `pycapnp` for Cap'n Proto messages and `msgpack` for price updates.
+These provide `pycapnp` for messages, `msgpack` for TCP price updates, and
+`websocket-client` for WebSocket orders.
 
-### Prepare Titan
+## Start Titan
 
-1. Open Titan and create or open the profile you want to use.
-2. Configure the session's reference data and price feed. The strategy needs
-   securities, accounts, account-to-venue mappings, security-to-venue attributes,
-   and risk channels linking securities to price streams.
-3. In **Profile configuration**, use **Show tokens** beside **Order-entry token**
-   to obtain the token for the profile.
-4. Check the host and order-entry and market-data TCP ports in the profile's
-   **Connections** section.
-5. Start the session and keep it running while you run the sample.
+1. Create or open a Titan profile and configure its accounts, venues, securities,
+   and price feed.
+2. In **Profile configuration**, use **Show tokens** beside **Order-entry token**
+   to copy the token for the profile.
+3. Check the connect host and service ports in **Connections**.
+4. Start the session and keep it running while running a sample.
 
-### Run the strategy
+The default connect host is `localhost`. The **Client name** defaults to
+`client`. The same name identifies the accounts visible to the strategy and
+the strategy in the first venue's order route.
 
-In a terminal with the virtual environment active, run:
+| Service | Default port | Sample |
+| --- | --- | --- |
+| Carnitas orders | `8032` | TCP |
+| Carnitas market data | `8033` | TCP |
+| WebSocket orders | `8034` | WebSocket |
+| REST prices | `8035` | WebSocket |
+| REST reference data | `8036` | WebSocket |
+
+## Run a strategy
+
+With the virtual environment active and the Titan session running, choose a
+sample. Replace `<TOKEN>` with the complete order-entry token from that session.
+
+### TCP
 
 ```sh
 python tcp-strategy.py --token "<TOKEN>"
 ```
 
-Replace `<TOKEN>` with the order-entry token from Titan. By default, the script
-connects to `localhost`, using port `8032` for order entry and `8033` for market
-data. If your profile uses different settings, supply them explicitly:
+See the [TCP strategy guide](docs/strategies/tcp.md) for endpoint overrides,
+options, schemas, recovery, and troubleshooting.
+
+### WebSocket
 
 ```sh
-python tcp-strategy.py --host "<HOST>" --port <ORDER_PORT> --market-port <MARKET_PORT> --token "<TOKEN>"
+python ws-strategy.py --token "<TOKEN>"
 ```
 
-Replace the host, ports, and token placeholders with your profile's settings.
-Both connections use the same token.
-
-The script loads `strategy.capnp`, `reference.capnp`, and
-`schemas_version.capnp` from the directory containing `tcp-strategy.py`.
-Keep the accompanying `common.capnp`, `go.capnp`, `c.capnp`, and `c++.capnp`
-files in that directory too. The default schema location works even when you
-invoke the script from another working directory. To use a different,
-compatible schema set, pass `--schemas`:
-
-```sh
-python tcp-strategy.py --token "<TOKEN>" --schemas "<SCHEMA_DIRECTORY>"
-```
-
-A relative `--schemas` path is resolved from your terminal's working directory.
-The schema version must match the running service.
-
-To see all options:
-
-```sh
-python tcp-strategy.py --help
-```
+See the [WebSocket strategy guide](docs/strategies/websocket.md) for REST
+endpoints, options, schemas, TLS, recovery, and troubleshooting.
 
 ### Expected output
 
-Once reference data and valid prices are available, the script prints:
+Once reference data and valid prices are available, the sample prints:
 
 ```text
 Placed <COUNT> orders using live prices
@@ -103,18 +99,23 @@ Order update: <EVENT>
 Done
 ```
 
-A cancellation or rejection is also a terminal response; `Done` means every
-submitted order received a terminal response, rather than that every order filled.
-If the script is waiting without placing orders, check that the session is
-publishing reference data and a positive ask price and ask quantity for at least
-one eligible account, security, and venue combination.
+`Done` means every submitted order received a terminal fill, cancellation, or
+rejection. Each sample submits one batch. Both wait for initial eligible data
+without an overall startup deadline; press **Ctrl+C** to stop while waiting.
 
-The default `--timeout` is 30 seconds for each connection and handshake, and for
-the batch's order responses. It does not limit the initial wait for suitable
-reference data and prices. Press **Ctrl+C** to stop the script.
+## Documentation
 
-If authentication fails, check that the token is exactly 256 ASCII characters
-and belongs to the running session. After changing a profile's token, save the
-profile and start a new session; existing sessions retain their original token.
-If the script reports a schema-version mismatch, use schemas matching the
-running Titan release.
+| Interface | Strategy guide | API guide | Protocol specification |
+| --- | --- | --- | --- |
+| Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp.md) | [TCP protocol](docs/protocol/tcp.md) |
+| WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/websocket.md) | [WebSocket protocol](docs/protocol/websocket.md) |
+
+- [Order API](docs/api/orders.md): application requests, acknowledgements,
+  executions, and failures shared by both transports.
+- [Reference REST API](docs/api/reference.md): account, venue, security,
+  position, and limit discovery.
+- [Market-data REST API](docs/api/market-data.md): price-query requests,
+  field/value responses, and endpoint errors.
+
+The bundled [strategy schema](strategy.capnp), [reference schema](reference.capnp),
+and [schema version](schemas_version.capnp) define the messages used by the samples.
