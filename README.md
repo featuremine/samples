@@ -1,8 +1,11 @@
 # Titan samples
 
-Welcome to the Titan samples. This repository contains Python strategies and
-API documentation to help you retrieve reference data and prices and send
-orders to a running Titan session.
+Welcome to the introductory samples for portfolio managers. These examples
+show how to connect your strategy to order management services, retrieve
+reference data and prices, and submit orders.
+
+By accessing or using this software, you agree to be bound by the terms of the
+[End User License Agreement](EULA) included in this repository.
 
 The examples cover two ways to connect:
 
@@ -10,11 +13,6 @@ The examples cover two ways to connect:
   and orders.
 - [WebSocket strategy](ws-strategy.py): uses the WebSocket API for orders and
   the REST APIs for reference data and prices.
-
-Both samples submit one batch of simulated IOC limit buy orders and wait for
-the results. Each order uses the current ask price and a quantity of up to one
-unit. The strategy guides describe how accounts, securities, and venues are
-selected.
 
 ## Set up Python
 
@@ -42,6 +40,10 @@ python -m pip install -r requirements.txt
 ```
 
 ## Start Titan
+
+Titan provides the local test environment used in this guide. It runs the
+TCP, WebSocket, and REST services and simulates order execution. Your profile
+defines the accounts, venues, securities, and price feed used by the samples.
 
 1. Create or open a Titan profile and configure its accounts, venues, securities,
    and price feed. Use one execution venue with these samples.
@@ -71,6 +73,11 @@ orders from all visible venue mappings, so use one execution venue.
 | REST reference data | `8036` | WebSocket |
 
 ## Run a strategy
+
+Both samples submit one batch of simulated IOC limit buy orders and wait for
+the results. Each order uses the current ask price and a quantity of up to one
+unit. The strategy guides describe how accounts, securities, and venues are
+selected.
 
 With the virtual environment active and the Titan session running, choose a
 sample. Replace `<TOKEN>` with the complete order-entry token from that session.
