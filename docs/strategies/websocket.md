@@ -26,9 +26,9 @@ python ws-strategy.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_POR
 
 | Service | Default port | Documentation |
 | --- | --- | --- |
-| WebSocket orders | `8034` | [WebSocket API](../api/websocket.md) |
-| REST prices | `8035` | [Market-data API](../api/market-data.md) |
-| REST reference data | `8036` | [Reference API](../api/reference.md) |
+| WebSocket orders | `8034` | [WebSocket API](../api/ws-gateway.md) |
+| REST prices | `8035` | [Market-data API](../api/rest-market-data.md) |
+| REST reference data | `8036` | [Reference API](../api/rest-reference.md) |
 
 The [strategy schema](../../strategy.capnp) defines order requests and responses.
 
@@ -73,8 +73,8 @@ schema must be compatible with the running service.
 
 Before placing orders, the sample retrieves accounts, securities, venue-account
 mappings, venue-security attributes, and positions from the
-[reference REST API](../api/reference.md). It requests ask field `25` and
-ask-quantity field `735` from the [market-data REST API](../api/market-data.md)
+[reference REST API](../api/rest-reference.md). It requests ask field `25` and
+ask-quantity field `735` from the [market-data REST API](../api/rest-market-data.md)
 using `POST /api/prices`.
 
 In Titan, the first account's **Account name** identifies the strategy to the
@@ -145,8 +145,8 @@ failure can appear as an order-response timeout.
 - If no orders are placed, check that the price service returns positive,
   finite ask prices and ask quantities for eligible securities.
 - For REST errors other than the retried 503 status, see the
-  [reference API](../api/reference.md) or [market-data API](../api/market-data.md).
-- If the WebSocket closes, check the [API guide's close codes](../api/websocket.md#pingpong-and-close).
+  [reference API](../api/rest-reference.md) or [market-data API](../api/rest-market-data.md).
+- If the WebSocket closes, check the [API guide's close codes](../api/ws-gateway.md#pingpong-and-close).
   Only the newest connection accepted for a token remains active.
 - If order responses time out, check the running session for forwarding or
   execution failures, and confirm that only one execution venue is configured.

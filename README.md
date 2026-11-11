@@ -109,16 +109,16 @@ overall startup deadline. Press **Ctrl+C** to stop while waiting.
 
 | Interface | Strategy guide | API guide |
 | --- | --- | --- |
-| Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp.md) |
-| WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/websocket.md) |
+| Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp-carnitas.md) |
+| WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/ws-gateway.md) |
 
 The [old strategy guide](docs/strategies/tcp-old.md) covers
 [ws-strategy-old.py](ws-strategy-old.py), its random target positions, and DAY
 limit orders.
 
-- [Reference REST API](docs/api/reference.md): account, venue, security,
+- [Reference REST API](docs/api/rest-reference.md): account, venue, security,
   position, and limit discovery.
-- [Market-data REST API](docs/api/market-data.md): price-query requests,
+- [Market-data REST API](docs/api/rest-market-data.md): price-query requests,
   field/value responses, and endpoint errors.
 
 The bundled [strategy schema](strategy.capnp), [reference schema](reference.capnp),

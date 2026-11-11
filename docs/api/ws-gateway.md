@@ -16,8 +16,8 @@ services:
 | Service | Default port | Contract |
 | --- | ---: | --- |
 | WebSocket orders | 8034 | Packed `strategy/ManagerMessage` requests and replies |
-| REST market prices | 8035 | [ASCII field/value queries](market-data.md) |
-| REST reference data | 8036 | [Authenticated reference JSON](reference.md) |
+| REST market prices | 8035 | [ASCII field/value queries](rest-market-data.md) |
+| REST reference data | 8036 | [Authenticated reference JSON](rest-reference.md) |
 
 Titan's embedded endpoints use plain WS/HTTP. Use WSS/HTTPS when connecting
 through a TLS endpoint. In the bundled sample, `--tls` switches all three
@@ -70,11 +70,11 @@ replay offsets, and use for retransmission.
 
 **3. Discover reference data.** Request accounts, security definitions,
 account/venue mappings, venue/security attributes, and positions from the
-[reference REST API](reference.md). Match these records to find eligible
+[reference REST API](rest-reference.md). Match these records to find eligible
 account/security/venue combinations for the configured route.
 
 **4. Obtain prices.** Request FIDs 25 and 735 for the eligible numeric security
-identifiers from the [price REST API](market-data.md). Retry HTTP 503
+identifiers from the [price REST API](rest-market-data.md). Retry HTTP 503
 while the price service loads its initial data. Check that prices
 and quantities are finite and positive before using them in an order.
 
@@ -167,12 +167,12 @@ submitted as separate requests.
 
 Set `message.strg` to `new`, `cancel`, or `replace`, or use `new2`/`replace2`
 for text prices and quantities. Support depends on the OMS or execution service.
-The TCP guide's [order encoder](tcp.md#sending-orders) constructs the same
+The TCP guide's [order encoder](tcp-carnitas.md#sending-orders) constructs the same
 packed payload; send the returned bytes as a binary WebSocket message.
 
 Use a distinct `strgOrdID` for each new order and retain it to match replies.
 Cancel and replace requests use the existing order's identifier; see
-[cancel and replace](tcp.md#cancel-and-replace) for the shared request fields.
+[cancel and replace](tcp-carnitas.md#cancel-and-replace) for the shared request fields.
 
 Decode replies with `strategy.ManagerMessage.from_bytes_packed(payload)` and
 inspect the `message` union. A `ctrl.placeForwarded`, `cancelForwarded`, or

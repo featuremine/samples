@@ -33,7 +33,7 @@ python ws-strategy-old.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES
 ```
 
 For connection, recovery, and message formats, see the
-[WebSocket API](../api/websocket.md). The
+[WebSocket API](../api/ws-gateway.md). The
 [strategy schema](../../strategy.capnp) defines order requests and responses.
 
 ## Options
@@ -84,13 +84,13 @@ compatible with the running service.
 
 Before placing orders, the sample retrieves accounts, venues, securities,
 venue-security attributes, venue-account mappings, and positions from the
-[reference REST API](../api/reference.md). It stops with an error if required
+[reference REST API](../api/rest-reference.md). It stops with an error if required
 account, venue, security, or mapping data is empty.
 
 The initial price query sends **GET `/api/prices` with a request body**, using
 `Content-Type: text/plain; charset=us-ascii`. It requests bid field `22` and ask
 field `25` for securities in the venue-security attributes. The current
-[market-data API guide](../api/market-data.md) documents POST for price queries;
+[market-data API guide](../api/rest-market-data.md) documents POST for price queries;
 check that the server accepts the old script's GET-with-body form.
 
 The returned prices do not determine which orders are placed, their limit

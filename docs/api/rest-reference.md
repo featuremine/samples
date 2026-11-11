@@ -4,7 +4,7 @@ Use the reference API to retrieve the accounts, securities, venues, positions,
 and limits available to your token. The responses include the relationships
 needed to select an account and venue for an order.
 
-See the [WebSocket integration guide](websocket.md) for the connection workflow
+See the [WebSocket integration guide](ws-gateway.md) for the connection workflow
 and the [WebSocket strategy guide](../strategies/websocket.md) to run the sample.
 
 ## Endpoint and Authentication
@@ -97,4 +97,4 @@ above.
 The [WebSocket sample](../../ws-strategy.py) demonstrates discovery using
 `/securities`, `/accounts`, `/venueAccountMappings`, `/venueSecurityAttributes`,
 and `/positions`. Use the returned security identifiers to request quotes from
-the [market-data REST API](market-data.md).
+the [market-data REST API](rest-market-data.md).

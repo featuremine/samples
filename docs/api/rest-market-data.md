@@ -1,8 +1,8 @@
 # Market-Data REST API
 
 Use the market-data API to request price fields for security identifiers
-obtained from the [reference API](reference.md). See the
-[WebSocket integration guide](websocket.md) for the connection workflow and the
+obtained from the [reference API](rest-reference.md). See the
+[WebSocket integration guide](ws-gateway.md) for the connection workflow and the
 [WebSocket strategy guide](../strategies/websocket.md) to run the sample.
 
 ## Endpoint and Access

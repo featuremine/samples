@@ -24,7 +24,7 @@ endpoint settings:
 python tcp-strategy.py --host "<HOST>" --port <ORDER_PORT> --market-port <MARKET_PORT> --token "<TOKEN>"
 ```
 
-For connection, recovery, and message formats, see the [TCP API](../api/tcp.md).
+For connection, recovery, and message formats, see the [TCP API](../api/tcp-carnitas.md).
 The [strategy schema](../../strategy.capnp) defines order requests and responses.
 
 ## Options
