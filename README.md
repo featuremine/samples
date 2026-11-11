@@ -48,12 +48,14 @@ These provide `pycapnp` for messages, `msgpack` for TCP price updates, and
 
 1. Create or open a Titan profile and configure its accounts, venues, securities,
    and price feed.
-2. In **Profile configuration**, use **Show tokens** beside **Order-entry token**
-   to copy the token for the profile.
-3. Check the connect host and service ports in **Connections**.
+2. In **Profile configuration**, reveal and copy **Order-entry token**.
+3. Check **Host** and the service ports in **Connections**.
 4. Start the session and keep it running while running a sample.
 
-The default connect host is `localhost`. In **Accounts**, the first account's
+The default **Host** listens on all IPv4 interfaces; Titan connects through
+loopback. For any other **Host**, Titan uses the configured value as the connect
+address. Use that connect address for the sample's `--host` option.
+In **Accounts**, the first account's
 **Account name** supplies the connection's client/strategy identity. New profiles
 start with a first account named `client`; saved names are used as entered. Each account's
 `Account.client` is seeded from its own name. The order-entry token exposes
@@ -63,8 +65,8 @@ requires a new session.
 
 | Service | Default port | Sample |
 | --- | --- | --- |
-| Carnitas orders | `8032` | TCP |
-| Carnitas market data | `8033` | TCP |
+| TCP orders | `8032` | TCP |
+| TCP market data | `8033` | TCP |
 | WebSocket orders | `8034` | WebSocket |
 | REST prices | `8035` | WebSocket |
 | REST reference data | `8036` | WebSocket |
@@ -113,6 +115,10 @@ without an overall startup deadline; press **Ctrl+C** to stop while waiting.
 | --- | --- | --- | --- |
 | Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp.md) | [TCP protocol](docs/protocol/tcp.md) |
 | WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/websocket.md) | [WebSocket protocol](docs/protocol/websocket.md) |
+
+The [old strategy guide](docs/strategies/tcp-old.md) covers
+[ws-strategy-old.py](ws-strategy-old.py), its random target positions, and DAY
+limit orders.
 
 - [Order API](docs/api/orders.md): application requests, acknowledgements,
   executions, and failures shared by both transports.

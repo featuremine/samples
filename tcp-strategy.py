@@ -15,6 +15,9 @@ import msgpack
 MAGIC = b"tcn v031"
 HANDSHAKE = struct.Struct("<8sHHHH")
 HEADER = struct.Struct("<BBHIqQ")
+SYMBOLOGY = 101
+VENUE_DATA = 102
+RISK_DATA = 103
 ELEKTRON = 108
 
 
@@ -89,7 +92,7 @@ async def main(args):
                     streams[stream] = channel
                 continue
             connection["received"] += 1
-            if kind == 101:
+            if kind == SYMBOLOGY:
                 message = reference.Symbology.from_bytes_packed(payload)
                 value = message.message
                 if value.which() == "securityDefinition":
@@ -97,14 +100,14 @@ async def main(args):
                     securities[definition.identifier] = definition.symbol
                 elif value.which() == "riskChannel":
                     channels[value.riskChannel.referenceId] = value.riskChannel.channelName
-            elif kind == 102:
+            elif kind == VENUE_DATA:
                 message = reference.VenueData.from_bytes_packed(payload)
                 value = message.message
                 if value.which() == "venueAccountMapping":
                     mappings.add((value.venueAccountMapping.identifier, value.venueAccountMapping.venueID))
                 elif value.which() == "venueSecurityAttribute":
                     attributes.add((value.venueSecurityAttribute.securityId, value.venueSecurityAttribute.venueID))
-            elif kind == 103:
+            elif kind == RISK_DATA:
                 message = reference.RiskData.from_bytes_packed(payload)
                 value = message.message
                 if value.which() == "account":

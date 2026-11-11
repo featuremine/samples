@@ -93,7 +93,8 @@ The shared order-selection rules and expected output are in the
 ## Troubleshooting
 
 - For connection errors, check that the Titan session is running and that both
-  TCP ports and the connect host match **Connections** in the profile.
+  TCP ports match **Connections** in the profile. Set `--host` to the configured
+  **Host**, or to loopback when **Host** is the default wildcard IPv4 address.
 - For authentication errors, copy the complete 256-character ASCII order-entry
   token from the running session.
 - For a schema-version mismatch or decoding error, use schemas compatible with
