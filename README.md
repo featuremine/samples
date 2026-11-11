@@ -1,7 +1,10 @@
 # Titan samples
 
-Use these Python sample strategies to retrieve reference data and prices and
-send orders to a running Titan session:
+Welcome to the Titan samples. This repository contains Python strategies and
+API documentation to help you retrieve reference data and prices and send
+orders to a running Titan session.
+
+The examples cover two ways to connect:
 
 - [TCP strategy](tcp-strategy.py): uses the TCP API for reference data, prices,
   and orders.
