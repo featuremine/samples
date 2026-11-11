@@ -56,7 +56,7 @@ checks and use the smaller of the ask quantity and one unit. See the
 
 Retry HTTP 503 responses while startup data loads. A successful response can
 still contain only part of the initial data, so repeat the query if the fields
-your client needs are missing. Each query reads the current cached values;
+your strategy needs are missing. Each query reads the current cached values;
 repeat queries as needed to obtain market-data updates.
 
 ## Status Codes and Limits
@@ -70,9 +70,8 @@ repeat queries as needed to obtain market-data updates.
 | 415 | Send `Content-Type: text/plain; charset=us-ascii` |
 | 503 | Startup data is still loading; retry the request |
 
-Responses are limited to 32 MiB, and individual rows also have a size limit.
-Request only the securities and fields you need. If a response cannot be
-constructed, reduce the number of securities or fields in the query.
+Requests are limited to 16 MiB, responses are limited to 32 MiB, and individual rows also have a size limit of 383 bytes.
+If a response cannot be constructed, reduce the number of securities or fields in the query.
 
 For an example request and response parser, see
 [ws-strategy.py](../../ws-strategy.py).
