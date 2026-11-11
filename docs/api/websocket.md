@@ -2,7 +2,7 @@
 
 This guide describes how to submit orders and receive responses over WebSocket,
 using REST for reference data and prices. Order messages use the same Cap'n
-Proto schema as the TCP order API.
+Proto schema as the TCP API.
 
 For framing, recovery fields, Ping/Pong, and close codes, see the
 [WebSocket protocol specification](../protocol/websocket.md). For setup and run
@@ -63,8 +63,8 @@ and quantities are finite and positive before using them in an order.
 per binary WebSocket message. Keep receiving while sending a batch, and retain
 responses that arrive before the last order is sent. Correlate replies with
 their `strgOrdID` and process them until the orders are complete. The
-[order API](orders.md) defines requests, acknowledgements, executions, and
-failures.
+[strategy schema](../../strategy.capnp) defines requests, acknowledgements,
+executions, and failures.
 
 **6. Close.** Finish the WebSocket close handshake and release the connection.
 
@@ -93,17 +93,40 @@ recovery metadata; subsequent replies are binary packed Cap'n Proto.
 
 ## Order Payloads and Responses
 
-Use the bundled [strategy schema](../../strategy.capnp) and the
-[shared order API](orders.md) to construct and decode payloads. Each binary
+Use the bundled [strategy schema](../../strategy.capnp) and
+[common types](../../common.capnp) to construct and decode payloads. Each binary
 application message carries a packed payload without a TCP header, checksum,
 or stream announcement. Use schemas compatible with the service; WebSocket has
 no schema-version handshake.
+
+Set `message.strg` to `new`, `cancel`, or `replace`, or use `new2`/`replace2`
+for text prices and quantities. Support depends on the OMS or execution service.
+The TCP guide's [order encoder](tcp.md#sending-orders) constructs the same
+packed payload; send the returned bytes as a binary WebSocket message.
+
+Use a distinct `strgOrdID` for each new order and retain it to match replies.
+Cancel and replace requests use the existing order's identifier; see
+[cancel and replace](tcp.md#cancel-and-replace) for the shared request fields.
+
+Decode replies with `strategy.ManagerMessage.from_bytes_packed(payload)` and
+inspect the `message` union. A `ctrl.placeForwarded`, `cancelForwarded`, or
+`replaceForwarded` acknowledgement confirms forwarding. Treat `ctrl.failed`
+and `sess.failed` as request failures and read their identifier, type, and
+reason. Execution events arrive in `sess.exec` or `sess.exec2`; inspect their
+`data` union. `Exec` uses floating-point numeric fields, while `Exec2` represents
+prices and quantities as text. Use `strgOrdID` to correlate replies;
+`ManagerMessage.seqnum` is a separate sequence for each output channel.
 
 The [bundled sample](../../ws-strategy.py) submits the same IOC limit-buy batch
 as the TCP sample. It consumes the advertised historical replies before the
 batch, retains replies during sends, and finishes when every order receives
 `filled`, `canceled`, or `rejected`. A forwarding acknowledgement does not
 complete an order. A `message.sess.failed` response ends the sample with an error.
+The sample ignores `ctrl.failed`, which can leave it waiting until its
+order-response timeout.
+
+Replies cover the token's response channel. Titan's separate main-session
+broadcast status is available through TCP and is absent from WebSocket replies.
 
 For message limits, invalid-message handling, and replacement of a connection
 using the same token, see the [WebSocket specification](../protocol/websocket.md).

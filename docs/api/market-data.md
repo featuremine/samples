@@ -50,7 +50,7 @@ Treat `<FIELD_ID> N/A` as a missing field. A row containing only
 For the IOC buy shown in these guides, require a present, finite, positive ask
 price and ask quantity. The current TCP and WebSocket IOC samples apply those
 checks and use the smaller of the ask quantity and one unit. See the
-[order API](orders.md) for the order fields.
+[strategy schema](../../strategy.capnp) for the order fields.
 
 ## Startup Recovery
 

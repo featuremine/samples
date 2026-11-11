@@ -30,7 +30,7 @@ python ws-strategy.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_POR
 | REST prices | `8035` | [Market-data API](../api/market-data.md) |
 | REST reference data | `8036` | [Reference API](../api/reference.md) |
 
-The [order API](../api/orders.md) describes order requests and responses.
+The [strategy schema](../../strategy.capnp) defines order requests and responses.
 
 ## Options
 

@@ -116,8 +116,6 @@ The [old strategy guide](docs/strategies/tcp-old.md) covers
 [ws-strategy-old.py](ws-strategy-old.py), its random target positions, and DAY
 limit orders.
 
-- [Order API](docs/api/orders.md): application requests, acknowledgements,
-  executions, and failures shared by both transports.
 - [Reference REST API](docs/api/reference.md): account, venue, security,
   position, and limit discovery.
 - [Market-data REST API](docs/api/market-data.md): price-query requests,

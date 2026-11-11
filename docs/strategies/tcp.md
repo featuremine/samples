@@ -26,7 +26,7 @@ python tcp-strategy.py --host "<HOST>" --port <ORDER_PORT> --market-port <MARKET
 
 For connection and recovery instructions, see the [TCP API](../api/tcp.md).
 The [TCP protocol](../protocol/tcp.md) specifies the message format, and the
-[order API](../api/orders.md) describes order requests and responses.
+[strategy schema](../../strategy.capnp) defines order requests and responses.
 
 ## Options
 

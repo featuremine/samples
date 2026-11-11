@@ -2,8 +2,8 @@
 
 This specification defines the messages exchanged over a Carnitas TCP
 connection. For the connection workflow, see the [TCP API](../api/tcp.md).
-For order payloads, see the [order API](../api/orders.md). Setup and run commands
-are in the [TCP strategy guide](../strategies/tcp.md) and
+For order payloads, see the [strategy schema](../../strategy.capnp). Setup and run
+commands are in the [TCP strategy guide](../strategies/tcp.md) and
 [main README](../../README.md).
 
 ## Versions and Encoding

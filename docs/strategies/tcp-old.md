@@ -35,7 +35,8 @@ python ws-strategy-old.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES
 For connection and recovery instructions, see the
 [WebSocket API](../api/websocket.md). The
 [WebSocket protocol](../protocol/websocket.md) specifies the message format,
-and the [order API](../api/orders.md) describes order requests and responses.
+and the [strategy schema](../../strategy.capnp) defines order requests and
+responses.
 
 ## Options
 

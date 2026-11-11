@@ -7,7 +7,7 @@ see the [TCP strategy guide](../strategies/tcp.md) and
 
 The [TCP protocol specification](../protocol/tcp.md) defines message layouts,
 version checks, and recovery counts. Orders and responses use the
-[order API](orders.md); reference messages use the
+[strategy schema](../../strategy.capnp); reference messages use the
 [reference schema](../../reference.capnp).
 
 ## Connections and Authentication
@@ -103,20 +103,100 @@ field values when an update omits them.
 
 The sample uses ask price FID **25** and ask quantity FID **735**. Once both are
 finite and positive, it submits one IOC limit-buy batch for eligible account,
-security, and venue combinations. See the
-[order API](orders.md#new-ioc-limit-order) for the request fields.
+security, and venue combinations.
+
+## Sending Orders
+
+Construct a packed `strategy/ManagerMessage` and send it in a type-100 frame.
+Set `message.strg` to `new`, `cancel`, or `replace`. Use `new2` or `replace2`
+when prices and quantities need to be represented as text. The OMS or execution
+service determines which requests are supported. The
+[strategy schema](../../strategy.capnp) and [common types](../../common.capnp)
+define the full set of fields and variants.
+
+The following encoder constructs the IOC limit buy used by the samples. Pass
+account, security, and venue identifiers from discovery, and the ask price and
+quantity from market data:
+
+```python
+import math
+import time
+
+import capnp
+
+# Run from the repository root, or pass the corresponding schema path.
+strategy = capnp.load("strategy.capnp")
+
+
+def encode_ioc(account_id, security_id, venue_id, ask, ask_quantity):
+    if not math.isfinite(ask) or ask <= 0:
+        raise ValueError("Ask must be finite and positive")
+    if not math.isfinite(ask_quantity) or ask_quantity <= 0:
+        raise ValueError("Ask quantity must be finite and positive")
+    order_id = time.time_ns()
+    message = strategy.ManagerMessage.new_message()
+    message.from_dict({"message": {"strg": {"new": {
+        "strgOrdID": order_id,
+        "accountID": int(account_id),
+        "securityId": int(security_id),
+        "venueID": int(venue_id),
+        "orderSide": "buy",
+        "orderType": {"limit": ask},
+        "quantity": min(ask_quantity, 1.0),
+        "maxFloor": {"none": None},
+        "timeInForce": "ioc",
+        "algorithm": {"dma": None},
+    }}}})
+    return order_id, message.to_bytes_packed()
+```
+
+Use a distinct `strgOrdID` for each new order and retain it to match replies.
+The current samples check for identifier collisions within their pending
+batch. The identifiers in `Place` are signed 64-bit integers. Supply a finite,
+positive quantity and a finite limit price; the IOC examples also require a
+positive ask and use at most one unit per order.
+
+### Cancel and Replace
+
+To cancel an order, send `message.strg.cancel` with its existing `strgOrdID`.
+To replace it, send `message.strg.replace` with the same identifier. Set each
+`price` or `quantity` union to `unknown` to leave that value unchanged, or to
+`price` or `quantity` to supply a new value. See `Cancel`, `Replace`, and their
+response types in the [strategy schema](../../strategy.capnp).
+
+The bundled strategies do not send cancel or replace requests.
 
 ## Order Responses and Liveness
 
-Decode type-100 replies as packed `strategy/ManagerMessage` values and match
-them to orders using `strgOrdID`. A forwarding acknowledgement does not confirm
-an execution. Treat `message.ctrl.failed` and `message.sess.failed` as failures
-for the request identified by `strgOrdID`. The
-[order API](orders.md#order-responses) describes each response.
+Decode type-100 replies as packed `strategy/ManagerMessage` values:
+
+```python
+message = strategy.ManagerMessage.from_bytes_packed(payload)
+kind = message.message.which()
+```
+
+Use `strgOrdID` to match a response to its order. Track TCP transport sequence
+numbers and `ManagerMessage.seqnum` separately. Each output channel has its own
+application sequence; use the TCP stream identifier to distinguish them.
+
+Read `message.ctrl.placeForwarded`, `cancelForwarded`, or `replaceForwarded`
+as acknowledgement that the corresponding request was forwarded. Keep waiting
+for its execution or rejection response. Treat `message.ctrl.failed` and
+`message.sess.failed` as request failures; each carries the request identifier,
+type, and reason.
+
+Read execution events from `message.sess.exec` or `message.sess.exec2`, then
+inspect the `data` union. `Exec` uses floating-point numeric fields; `Exec2`
+represents prices and quantities as text. Fill events include last quantity
+and price, cumulative quantity, and remaining quantity.
 
 The sample finishes when every submitted order receives `filled`, `canceled`,
 or `rejected`, and reports `message.sess.failed` as an error. A `ctrl.failed`
 response can lead to a response timeout in the sample.
+
+Use session `logon`, `heartbeat`, and `logout` messages to track the execution
+session. Titan's main-session status is available on a separate broadcast
+channel through TCP; it is absent from WebSocket replies.
 
 The sample sends an empty type-1 transport heartbeat every ten seconds on both
 connections. These heartbeats are separate from OMS and session heartbeats

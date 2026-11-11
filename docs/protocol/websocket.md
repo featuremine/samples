@@ -2,9 +2,10 @@
 
 This specification defines the WebSocket order service's authentication,
 recovery, application messages, and connection behavior. See the
-[WebSocket API](../api/websocket.md) for integration, the [order API](../api/orders.md)
-for shared order fields, the [WebSocket strategy guide](../strategies/websocket.md)
-for commands, and the [repository README](../../README.md) for shared setup.
+[WebSocket API](../api/websocket.md) for integration, the
+[strategy schema](../../strategy.capnp) for shared order fields, the
+[WebSocket strategy guide](../strategies/websocket.md) for commands, and the
+[repository README](../../README.md) for shared setup.
 
 Reference discovery and price queries use separate services, described in the
 [reference REST API](../api/reference.md) and
