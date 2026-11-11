@@ -1,17 +1,14 @@
 # Order API — Application Messages
 
-TCP and WebSocket orders use the same packed
-`strategy/ManagerMessage` application payload. This guide describes the request
-and response members used by the samples. The bundled
-[strategy schema](../../strategy.capnp) and [common types](../../common.capnp) define
-the complete fields, unions, and enumerations.
+Send orders and read their responses as packed `strategy/ManagerMessage`
+payloads over either TCP or WebSocket. This guide covers the messages used by
+the current IOC examples. The [strategy schema](../../strategy.capnp) and
+[common types](../../common.capnp) define the full set of fields and variants.
 
-For connection and discovery steps, see the [TCP API](tcp.md) or
-[WebSocket API](websocket.md). For setup and run commands, see the
-[repository README](../../README.md).
-
-Detailed sample behavior is documented in the [TCP strategy guide](../strategies/tcp.md)
-and [WebSocket strategy guide](../strategies/websocket.md).
+Follow the [TCP API](tcp.md) or [WebSocket API](websocket.md) to connect and
+discover reference data before placing orders. To run an example, see the
+[TCP strategy guide](../strategies/tcp.md) or
+[WebSocket strategy guide](../strategies/websocket.md).
 
 ## Transport Encoding
 
@@ -20,22 +17,25 @@ and [WebSocket strategy guide](../strategies/websocket.md).
 | TCP | Packed `ManagerMessage` inside a type-100 frame |
 | WebSocket | Packed `ManagerMessage` as one binary message, without a TCP envelope |
 
-Use matching application schemas for both ends. Transport framing and schema
-compatibility checks are described in the [TCP specification](../protocol/tcp.md)
-and [WebSocket specification](../protocol/websocket.md).
+Use compatible application schemas at both ends. Follow the
+[TCP specification](../protocol/tcp.md) or
+[WebSocket specification](../protocol/websocket.md) for framing and schema
+compatibility checks.
 
 ## Order Requests
 
-The `message.strg` request union includes `new`, `cancel`, `replace`, and the
-text-numeric `new2`/`replace2` variants. Supported behavior depends on the OMS
-or execution service behind the route; the samples submit `new` IOC orders to
-Titan's fill model.
+Set `message.strg` to `new`, `cancel`, or `replace`. Use `new2` or `replace2`
+when prices and quantities need to be represented as text. The OMS or execution
+service determines which requests are supported.
+
+The current TCP and WebSocket samples send `new` IOC orders to Titan.
+The profile's order-entry token routes requests to the first
+configured venue; use that venue's identifier when placing an order.
 
 ### New IOC Limit Order
 
-The following function encodes the same request as the samples. Its identifiers
-and prices are arguments populated from discovery and market data; calling it
-only constructs bytes.
+Pass account, security, and venue identifiers from discovery, and the ask price
+and quantity from market data, to the following encoder:
 
 ```python
 import math
@@ -69,62 +69,77 @@ def encode_ioc(account_id, security_id, venue_id, ask, ask_quantity):
     return order_id, message.to_bytes_packed()
 ```
 
-Use a distinct `strgOrdID` for each request and retain it while awaiting the
-corresponding result. The scripts handle collisions within their pending batch.
-`Place` identifiers use signed 64-bit fields; quantity must be finite and
-positive, and a limit price must be finite. The samples additionally require a
-positive ask and cap each order at one unit.
+Send the returned packed payload through your order connection and retain
+`order_id` to match replies to this request. Use a distinct `strgOrdID` for each
+new order. The current TCP and WebSocket scripts check for identifier collisions
+within their pending batch. Cancel and replace requests use the existing
+order's identifier.
+
+The identifiers in `Place` are signed 64-bit integers. Supply a finite,
+positive quantity and a finite limit price. The IOC examples also require a
+positive ask and use at most one unit per order.
 
 ### Cancel and Replace
 
-`message.strg.cancel` identifies an existing order by `strgOrdID`.
-`message.strg.replace` identifies it by `strgOrdID` and uses the `price` and
-`quantity` unions to distinguish unchanged (`unknown`) values from supplied
-values. See `Cancel`, `Replace`, and their response types in the
-[strategy schema](../../strategy.capnp). The bundled strategies do not send these
-requests.
+To cancel an order, send `message.strg.cancel` with its existing `strgOrdID`.
+To replace it, send `message.strg.replace` with the same identifier. Set each
+`price` or `quantity` union to `unknown` to leave that value unchanged, or to
+`price` or `quantity` to supply a new value. See `Cancel`, `Replace`, and their
+response types in the [strategy schema](../../strategy.capnp).
+
+The bundled strategies do not send cancel or replace requests.
 
 ## Order Responses
 
-Decode a nonempty binary application payload using:
+Decode each nonempty binary application payload, then inspect `message`:
 
 ```python
 message = strategy.ManagerMessage.from_bytes_packed(payload)
 kind = message.message.which()
 ```
 
-The outer union distinguishes `ctrl`, `sess`, and `strg`. TCP transport sequence
-numbers, `ManagerMessage.seqnum`, and `strgOrdID` serve different purposes;
-correlate orders using `strgOrdID`.
+Use `strgOrdID` to match a response to its order. Track TCP transport sequence
+numbers and `ManagerMessage.seqnum` separately. Each output channel has its own
+application sequence; on TCP, use the stream identifier to distinguish them.
 
 ### Control Acknowledgements and Failures
 
-`message.ctrl.placeForwarded`, `cancelForwarded`, and `replaceForwarded`
-describe forwarding of the corresponding request. A forwarding acknowledgement
-does not complete an order. `message.ctrl.failed` carries a `Failed` value with
-the request identifier, request type, and failure reason. Other control members
-are defined in the schema.
+Read `message.ctrl.placeForwarded`, `cancelForwarded`, or `replaceForwarded`
+as acknowledgement that the corresponding request was forwarded. Keep waiting
+for its execution or rejection response. `message.ctrl.failed` reports a
+forwarding failure; read its request identifier, request type, and reason.
+
+Handle `ctrl.failed` if your client needs to report forwarding failures
+immediately. The current TCP and WebSocket IOC samples ignore this message,
+which can leave them waiting until their order-response timeout.
 
 ### Session Executions
 
-`message.sess.exec` and `message.sess.exec2` carry order execution events. Read
-their `strgOrdID`, then inspect the `data` union. `Exec` uses binary floating
-numeric fields; `Exec2` represents quantities and prices as text. For example,
-fills include last quantity/price, cumulative quantity, and remaining quantity.
+Read order execution events from `message.sess.exec` or `message.sess.exec2`.
+Match `strgOrdID` to the pending order, then inspect the `data` union. `Exec`
+uses floating-point numeric fields; `Exec2` represents prices and quantities as
+text. Fill events include last quantity and price, cumulative quantity, and
+remaining quantity.
 
-The samples remove an order from their pending set on `filled`, `canceled`, or
-`rejected`, print each execution event, and finish once every submitted order
-has one of those terminal responses. Other schema events remain available to
-clients that need them. A forwarding control message does not substitute for a
-terminal execution event.
+The current IOC samples print each execution event and remove an order from
+the pending set on `filled`, `canceled`, or `rejected`. They finish after every
+submitted order has one of these terminal responses. For other workflows,
+handle the additional events defined in the schema.
 
 ### Session Failures and Liveness
 
-`message.sess.failed` also carries `ManagerMessage.Failed`; both samples treat
-it as a failed order request and terminate with an error. Session `logon`,
-`heartbeat`, and `logout` messages describe the execution session. They are
-application messages and are distinct from TCP type-1 heartbeats and WebSocket
-Ping/Pong frames.
+Read `message.sess.failed` as a request failure. It carries
+`ManagerMessage.Failed`, including the identifier, type, and reason. The
+current TCP and WebSocket IOC samples terminate with an error on this message.
 
-For complete receive loops, recovery handling, and pending-order tracking, see
+Use session `logon`, `heartbeat`, and `logout` messages to track the execution
+session. Continue handling TCP type-1 heartbeats or WebSocket Ping/Pong for the
+transport connection separately.
+
+Titan sends its main-session status on a separate broadcast channel. Read
+those records from the Carnitas TCP connection. The WebSocket syncer forwards
+only its mapped response channel, so it does not provide that broadcast status.
+
+For examples of receiving responses, replay handling, and pending-order
+tracking, see
 [tcp-strategy.py](../../tcp-strategy.py) and [ws-strategy.py](../../ws-strategy.py).

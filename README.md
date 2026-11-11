@@ -1,20 +1,17 @@
 # Titan samples
 
-This repository contains Python strategies for a running Titan session:
+Use these Python sample strategies to retrieve reference data and prices and
+send orders to a running Titan session:
 
-- [TCP strategy](tcp-strategy.py): reference data, prices, and orders through
-  Carnitas TCP connections.
-- [WebSocket strategy](ws-strategy.py): orders through the WebSocket syncer,
-  with reference data and prices through REST services.
+- [TCP strategy](tcp-strategy.py): uses the TCP API for reference data, prices,
+  and orders.
+- [WebSocket strategy](ws-strategy.py): uses the WebSocket API for orders and
+  the REST APIs for reference data and prices.
 
-Both samples discover eligible accounts, securities, and venues, submit one
-batch of simulated IOC limit buy orders, and wait for terminal responses.
-Each order uses the current ask price (field `25`) and the smaller of the ask
-quantity (field `735`) and one unit, with the DMA algorithm. Orders follow sorted
-security/venue pairs and ascending account identifiers. Positions are loaded
-but do not affect order selection.
-The scripts, [requirements](requirements.txt), and Cap'n Proto schemas are in
-the repository root.
+Both samples submit one batch of simulated IOC limit buy orders and wait for
+the results. Each order uses the current ask price and a quantity of up to one
+unit. The strategy guides describe how accounts, securities, and venues are
+selected.
 
 ## Set up Python
 
@@ -41,27 +38,26 @@ Install the shared requirements:
 python -m pip install -r requirements.txt
 ```
 
-These provide `pycapnp` for messages, `msgpack` for TCP price updates, and
-`websocket-client` for WebSocket orders.
-
 ## Start Titan
 
 1. Create or open a Titan profile and configure its accounts, venues, securities,
-   and price feed.
+   and price feed. Use one execution venue with these samples.
 2. In **Profile configuration**, reveal and copy **Order-entry token**.
 3. Check **Host** and the service ports in **Connections**.
 4. Start the session and keep it running while running a sample.
 
-The default **Host** listens on all IPv4 interfaces; Titan connects through
-loopback. For any other **Host**, Titan uses the configured value as the connect
-address. Use that connect address for the sample's `--host` option.
-In **Accounts**, the first account's
-**Account name** supplies the connection's client/strategy identity. New profiles
-start with a first account named `client`; saved names are used as entered. Each account's
-`Account.client` is seeded from its own name. The order-entry token exposes
-accounts whose names match the first account's name; differently named accounts
-are outside that token's scope. Renaming an account changes its ownership and
-requires a new session.
+The default **Host** listens on all IPv4 interfaces. When running the sample
+on the same machine, use its default `localhost`. For another **Host**, pass
+the configured address with `--host`. The profile tooltip shows the connection
+address and ports for each service.
+
+In **Accounts**, the first account's **Account name** identifies the strategy
+to the services. The order-entry token gives access to accounts with that
+same name. If you rename an account, start a new session before running a
+sample.
+
+The token routes orders to the first configured venue. The samples select
+orders from all visible venue mappings, so use one execution venue.
 
 | Service | Default port | Sample |
 | --- | --- | --- |
@@ -82,8 +78,8 @@ sample. Replace `<TOKEN>` with the complete order-entry token from that session.
 python tcp-strategy.py --token "<TOKEN>"
 ```
 
-See the [TCP strategy guide](docs/strategies/tcp.md) for endpoint overrides,
-options, schemas, recovery, and troubleshooting.
+See the [TCP strategy guide](docs/strategies/tcp.md) for connection settings,
+order selection, timeouts, and troubleshooting.
 
 ### WebSocket
 
@@ -91,8 +87,8 @@ options, schemas, recovery, and troubleshooting.
 python ws-strategy.py --token "<TOKEN>"
 ```
 
-See the [WebSocket strategy guide](docs/strategies/websocket.md) for REST
-endpoints, options, schemas, TLS, recovery, and troubleshooting.
+See the [WebSocket strategy guide](docs/strategies/websocket.md) for connection
+settings, order selection, timeouts, TLS, and troubleshooting.
 
 ### Expected output
 
@@ -106,8 +102,8 @@ Done
 ```
 
 `Done` means every submitted order received a terminal fill, cancellation, or
-rejection. Each sample submits one batch. Both wait for initial eligible data
-without an overall startup deadline; press **Ctrl+C** to stop while waiting.
+rejection. Both samples wait for eligible reference data and prices without an
+overall startup deadline. Press **Ctrl+C** to stop while waiting.
 
 ## Documentation
 

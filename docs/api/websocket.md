@@ -1,17 +1,19 @@
 # WebSocket API — Integration Guide
 
-The WebSocket order syncer carries the same packed application messages as the
-TCP order service. [ws-strategy.py](../../ws-strategy.py) combines it with HTTP
-reference discovery and price queries. For framing, recovery fields, Ping/Pong,
-and close codes, see the [WebSocket protocol specification](../protocol/websocket.md).
-For setup and commands, see the [repository README](../../README.md).
+This guide describes how to submit orders and receive responses over WebSocket,
+using REST for reference data and prices. Order messages use the same Cap'n
+Proto schema as the TCP order API.
 
-Detailed sample behavior is documented in the [WebSocket strategy guide](../strategies/websocket.md).
+For framing, recovery fields, Ping/Pong, and close codes, see the
+[WebSocket protocol specification](../protocol/websocket.md). For setup and run
+commands, see the [repository README](../../README.md) and
+[WebSocket strategy guide](../strategies/websocket.md).
 
 ## Services and Authentication
 
-Start a Titan session and use the profile's **Connections** settings and
-**order-entry token**:
+Start a Titan session and use its connect address, service ports, and
+**order-entry token**. The profile's **Connections** settings configure these
+services:
 
 | Service | Default port | Contract |
 | --- | ---: | --- |
@@ -19,54 +21,56 @@ Start a Titan session and use the profile's **Connections** settings and
 | REST market prices | 8035 | [ASCII field/value queries](market-data.md) |
 | REST reference data | 8036 | [Authenticated reference JSON](reference.md) |
 
-Titan's embedded endpoints use plain WS/HTTP. The sample's `--tls` option
-selects WSS/HTTPS for all three services when they are provided through a TLS
-endpoint.
+Titan's embedded endpoints use plain WS/HTTP. Use WSS/HTTPS when connecting
+through a TLS endpoint. In the bundled sample, `--tls` switches all three
+services to WSS/HTTPS.
 
-The WebSocket upgrade and reference REST requests use the token as the entire
-`Authorization` header value, without a `Bearer ` prefix. The price service
-currently does not authenticate requests. The sample sends its token on price
-requests too, but this does not restrict access to prices.
+Pass the complete token as the `Authorization` header value for the WebSocket
+upgrade and reference REST requests, without a `Bearer ` prefix. The price
+service does not authenticate requests; an `Authorization` header on a price
+query does not restrict access to prices.
 
-Titan derives the connection's client/strategy identity from the first
-configured account's **Account name**, and uses it for all fill models. Each account's
-`client` field comes from its own name. The profile token therefore exposes
-accounts whose names match the first account's name; differently named accounts
-are outside its scope. Use the identifiers discovered from the running session.
+The first account's **Account name** identifies your strategy in Titan. The
+token exposes accounts with matching names. Use the identifiers returned by
+reference discovery in the running session.
+
+The order-entry token routes orders to the first configured venue.
+Submit orders for that venue; changing `venueID` does not select another route.
 
 ## Integration Stages
 
-**1. Connect and authenticate.** Establish the WebSocket connection at
+**1. Connect and authenticate.** Open a WebSocket connection to
 `ws://<HOST>:<WS_PORT>/` using the complete token header. Missing or unknown
 authorization is rejected with HTTP 401.
 
-**2. Recover.** Read the initial text announcement containing `received` and
-`pending`, then consume its pending historical binary replies. The sample does
-this before submitting its new batch. The
-[protocol specification](../protocol/websocket.md) defines replay offsets and
-retransmission counters.
+**2. Recover.** Read the initial text message containing `received` and
+`pending`. Then read `pending` binary replies to complete recovery before
+submitting new orders. These counts cover the streams selected by the token;
+the [protocol specification](../protocol/websocket.md) defines their scope,
+replay offsets, and use for retransmission.
 
 **3. Discover reference data.** Request accounts, security definitions,
 account/venue mappings, venue/security attributes, and positions from the
-[reference REST API](reference.md). Join those relationships to find
-eligible account/security/venue combinations.
+[reference REST API](reference.md). Match these records to find eligible
+account/security/venue combinations for the configured route.
 
 **4. Obtain prices.** Request FIDs 25 and 735 for the eligible numeric security
 identifiers from the [price REST API](market-data.md). Retry HTTP 503
-while its initial snapshots are recovering. Use finite, positive prices and
-quantities.
+while the price service loads its initial data. Check that prices
+and quantities are finite and positive before using them in an order.
 
 **5. Send and receive application messages.** Send one packed `ManagerMessage`
-per binary WebSocket message. Queue responses while writing a batch so fast
-fills are retained, then process executions until its pending orders are
-complete. The common [order API](orders.md) defines payloads and responses.
+per binary WebSocket message. Keep receiving while sending a batch, and retain
+responses that arrive before the last order is sent. Correlate replies with
+their `strgOrdID` and process them until the orders are complete. The
+[order API](orders.md) defines requests, acknowledgements, executions, and
+failures.
 
 **6. Close.** Finish the WebSocket close handshake and release the connection.
 
 ## Connection Example
 
-This function opens an order connection when called with the session's
-settings:
+Open an order connection using the running session's settings:
 
 ```python
 import websocket
@@ -82,27 +86,24 @@ def connect_orders(host, port, token, timeout=30, tls=False):
     )
 ```
 
-Continue receiving while performing REST requests: the server sends periodic
-Ping frames, and `websocket-client` handles them when its receive loop runs.
-The sample keeps a receive worker active during discovery and price polling.
-The first text application message is recovery metadata; subsequent application
-replies are binary packed Cap'n Proto.
+Keep a receive loop running during REST discovery and price polling so Ping
+frames are answered. With `websocket-client`, receiving data also handles
+Ping/Pong control frames. The first application message is text containing
+recovery metadata; subsequent replies are binary packed Cap'n Proto.
 
 ## Order Payloads and Responses
 
 Use the bundled [strategy schema](../../strategy.capnp) and the
-[shared order API](orders.md) to construct and decode payloads. There is no
-TCP header, checksum, or stream announcement inside a WebSocket application
-message. Schema compatibility is established through the selected schema files;
-WebSocket does not negotiate a schema-version triplet.
+[shared order API](orders.md) to construct and decode payloads. Each binary
+application message carries a packed payload without a TCP header, checksum,
+or stream announcement. Use schemas compatible with the service; WebSocket has
+no schema-version handshake.
 
-The sample submits the same IOC limit-buy batch as the TCP sample. It ignores
-historical responses before its batch, retains fast replies during sends, and
-finishes after every submitted order receives `filled`, `canceled`, or
-`rejected`. A forwarding acknowledgement does not complete an order.
-`message.sess.failed` terminates the sample with an error.
+The [bundled sample](../../ws-strategy.py) submits the same IOC limit-buy batch
+as the TCP sample. It consumes the advertised historical replies before the
+batch, retains replies during sends, and finishes when every order receives
+`filled`, `canceled`, or `rejected`. A forwarding acknowledgement does not
+complete an order. A `message.sess.failed` response ends the sample with an error.
 
-The full receive and cleanup implementation is in
-[ws-strategy.py](../../ws-strategy.py). Protocol limits, invalid-message handling,
-and replacement of an older connection using the same token are documented in
-the [WebSocket specification](../protocol/websocket.md).
+For message limits, invalid-message handling, and replacement of a connection
+using the same token, see the [WebSocket specification](../protocol/websocket.md).

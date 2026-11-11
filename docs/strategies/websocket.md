@@ -1,25 +1,24 @@
 # WebSocket strategy
 
-The [WebSocket sample](../../ws-strategy.py) uses the WebSocket syncer for
-orders, the reference REST service for discovery, and the market-data REST
-service for prices. Follow the shared setup in the
-[main README](../../README.md) before running it.
+This guide explains how to run [ws-strategy.py](../../ws-strategy.py) with
+Titan. The sample retrieves reference data and prices through the REST APIs
+and sends orders through the WebSocket API.
 
-It submits one IOC limit-buy batch using ask field `25` and the smaller of ask
-quantity field `735` and one unit, with the DMA algorithm. Eligible
-security/venue pairs are processed in sorted order, followed by ascending
-account identifier within each pair. Positions are loaded but do not affect
-order selection.
+Follow the setup instructions in the [main README](../../README.md) before
+running the sample.
 
-Run these commands from the repository root, with the virtual environment
-active and the Titan session running:
+The sample submits one batch of IOC limit buy orders. Each order uses the
+current ask price and a quantity of up to one unit.
+
+Run the sample from the repository root with your virtual environment active
+and the Titan session running:
 
 ```sh
 python ws-strategy.py --token "<TOKEN>"
 ```
 
-The sample uses the same host and profile order-entry token across its three
-service connections. For different endpoint settings:
+The sample uses the same host for all three services. For different endpoint
+settings:
 
 ```sh
 python ws-strategy.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_PORT> --reference-port <REFERENCE_PORT> --token "<TOKEN>"
@@ -31,8 +30,7 @@ python ws-strategy.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_POR
 | REST prices | `8035` | [Market-data API](../api/market-data.md) |
 | REST reference data | `8036` | [Reference API](../api/reference.md) |
 
-The [order API](../api/orders.md) defines the application messages carried by
-the WebSocket connection.
+The [order API](../api/orders.md) describes order requests and responses.
 
 ## Options
 
@@ -57,12 +55,11 @@ To list all command-line options:
 python ws-strategy.py --help
 ```
 
-## Schemas and discovery
+## Schemas and reference data
 
-The sample loads [strategy.capnp](../../strategy.capnp) for packed
-`strategy/ManagerMessage` orders and responses. Keep its imported schema files
-alongside it. The default schema directory is the directory containing the
-script, including when the script is invoked from another working directory.
+The sample uses [strategy.capnp](../../strategy.capnp) for orders. Keep its
+imported schema files alongside it. By default, the sample uses the schemas
+in the script's directory, even when you run it from another working directory.
 
 To use another compatible schema set:
 
@@ -74,39 +71,66 @@ A relative `--schemas` path is resolved from the terminal's working directory.
 The WebSocket protocol has no schema-version handshake, so the selected order
 schema must be compatible with the running service.
 
-Reference discovery reads `/securities`, `/accounts`, `/venueAccountMappings`,
-`/venueSecurityAttributes`, and `/positions` as JSON. Price queries use
-`POST /api/prices` for ask field `25` and ask-quantity field `735`. The sample
-accepts numeric or decimal-string identifiers from the reference API.
+Before placing orders, the sample retrieves accounts, securities, venue-account
+mappings, venue-security attributes, and positions from the
+[reference REST API](../api/reference.md). It requests ask field `25` and
+ask-quantity field `735` from the [market-data REST API](../api/market-data.md)
+using `POST /api/prices`.
 
-The first configured account's **Account name** supplies the connection's client and
-strategy identity. Each seeded account's `Account.client` comes from that
-account's own name.
-Only accounts whose names match the first account are visible through the
-profile token. New profiles start with a first account named `client`; saved
-names are used as entered. An account rename requires a new session.
+In Titan, the first account's **Account name** identifies the strategy to the
+services. The order-entry token gives access to accounts with that same name.
+If you rename an account, start a new session before running the sample.
+
+The token routes orders to the first configured venue. Use one execution venue
+with this sample, since it selects orders from all visible venue mappings.
+
+## Order selection and sizing
+
+The sample selects securities that have a definition, a venue mapping, a
+mapped account, and positive, finite ask prices and quantities. It submits a
+buy order for each eligible account, security, and venue combination, using:
+
+- Ask price field `25` as the limit price.
+- The smaller of ask quantity field `735` and one unit as the order quantity.
+- IOC time in force and the DMA algorithm.
+
+Orders follow sorted security/venue pairs, then ascending account identifier
+within each pair. Positions do not affect order selection or sizing.
 
 ## Recovery and timeouts
 
-The sample validates the syncer's initial recovery announcement and consumes
-the advertised pending historical replies before submitting its new batch.
-Historical replies do not complete the new batch. A receive worker remains
-active during REST requests so WebSocket Ping frames continue to receive Pong
-responses.
+Each run receives the advertised `pending` historical replies before
+submitting its order batch. Historical replies do not complete the new batch.
+The sample continues to answer WebSocket Ping frames while retrieving
+reference data and prices.
 
 HTTP 503 responses are retried while the services finish recovery. There is no
 overall deadline for waiting for eligible reference data and positive, finite
 ask prices and quantities. A connection failure is reported as an error.
 
 `--timeout` must be positive and finite. It applies to connection setup, the
-first WebSocket recovery announcement, HTTP operations, and the batch's
-order-response deadline. Pending historical replay has no timeout after the
-initial announcement. The order-response deadline starts after the batch is
-submitted. Press **Ctrl+C** to stop the sample while waiting.
+first WebSocket recovery announcement, HTTP operations, and waiting for order
+responses. Historical replay has no timeout after the initial announcement.
+The order-response deadline starts after the batch is submitted. Press
+**Ctrl+C** to stop while waiting.
 
-Each invocation creates new order identifiers and submits its own single batch.
-The shared order-selection rules and expected output are in the
-[main README](../../README.md).
+Each run creates new order identifiers and submits one batch. It does not
+cancel or track outstanding orders from earlier runs.
+
+## Completion and output
+
+The sample prints the number of orders placed and subsequent order updates:
+
+```text
+Placed <COUNT> orders using live prices
+Order update: <EVENT>
+...
+Done
+```
+
+`Done` means every submitted order received a terminal fill, cancellation, or
+rejection. A `sess.failed` response stops the sample with an error. A forwarding
+failure can appear as an order-response timeout.
 
 ## Troubleshooting
 
@@ -115,15 +139,15 @@ The shared order-selection rules and expected output are in the
 - For authentication errors, copy the complete 256-character ASCII order-entry
   token from the running session. Reference and WebSocket authentication status
   codes are documented in their respective APIs.
-- If reference discovery is empty, check that the accounts' `client` assignment
-  matches the first account's **Account name**, then check account-to-venue mappings and
-  security-to-venue attributes. Differently named accounts are outside the
-  profile token's scope.
+- If reference data is empty, check that the account names match the first
+  account's **Account name**, then check account-to-venue mappings and
+  security-to-venue attributes.
 - If no orders are placed, check that the price service returns positive,
   finite ask prices and ask quantities for eligible securities.
 - For REST errors other than the retried 503 status, see the
   [reference API](../api/reference.md) or [market-data API](../api/market-data.md).
 - If the WebSocket closes, check the [protocol's close codes](../protocol/websocket.md#pingpong-and-close).
   Only the newest connection accepted for a token remains active.
-- If order responses time out, inspect the session's fill-model and order-flow
-  diagnostics. For decoding errors, use a compatible order schema.
+- If order responses time out, check the running session for forwarding or
+  execution failures, and confirm that only one execution venue is configured.
+- For decoding errors, use a compatible order schema.

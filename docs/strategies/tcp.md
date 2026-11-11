@@ -1,17 +1,17 @@
 # TCP strategy
 
-The [TCP sample](../../tcp-strategy.py) opens two Carnitas connections: one for
-orders and reference data, and one for market data. Follow the shared setup in
-the [main README](../../README.md) before running it.
+This guide explains how to run [tcp-strategy.py](../../tcp-strategy.py) with
+Titan. The sample retrieves reference data and prices and sends orders through
+the TCP API.
 
-It submits one IOC limit-buy batch using ask field `25` and the smaller of ask
-quantity field `735` and one unit, with the DMA algorithm. Eligible
-security/venue pairs are processed in sorted order, followed by ascending
-account identifier within each pair. Positions are loaded but do not affect
-order selection.
+Follow the setup instructions in the [main README](../../README.md) before
+running the sample.
 
-Run these commands from the repository root, with the virtual environment
-active and the Titan session running:
+The sample submits one batch of IOC limit buy orders. Each order uses the
+current ask price and a quantity of up to one unit.
+
+Run the sample from the repository root with your virtual environment active
+and the Titan session running:
 
 ```sh
 python tcp-strategy.py --token "<TOKEN>"
@@ -24,9 +24,9 @@ endpoint settings:
 python tcp-strategy.py --host "<HOST>" --port <ORDER_PORT> --market-port <MARKET_PORT> --token "<TOKEN>"
 ```
 
-The [TCP API](../api/tcp.md) describes application integration, the
-[TCP protocol](../protocol/tcp.md) defines the wire format, and the
-[order API](../api/orders.md) defines the shared order messages.
+For connection and recovery instructions, see the [TCP API](../api/tcp.md).
+The [TCP protocol](../protocol/tcp.md) specifies the message format, and the
+[order API](../api/orders.md) describes order requests and responses.
 
 ## Options
 
@@ -45,13 +45,14 @@ The connections use plain TCP. To list all command-line options:
 python tcp-strategy.py --help
 ```
 
-## Schemas
+## Schemas and reference data
 
-The sample loads [strategy.capnp](../../strategy.capnp),
-[reference.capnp](../../reference.capnp), and
-[schemas_version.capnp](../../schemas_version.capnp). Keep their imported schema
-files alongside them. The default directory is the directory containing the
-script, including when the script is invoked from another working directory.
+The sample uses [strategy.capnp](../../strategy.capnp) for orders,
+[reference.capnp](../../reference.capnp) for reference data, and
+[schemas_version.capnp](../../schemas_version.capnp) to check compatibility.
+Keep their imported schema files alongside them. By default, the sample uses
+the schemas in the script's directory, even when you run it from another
+working directory.
 
 To use another compatible schema set:
 
@@ -63,32 +64,63 @@ A relative `--schemas` path is resolved from the terminal's working directory.
 The sample checks the server's schema version during each handshake and
 requires an exact match with its loaded schema-version triplet.
 
+Before placing orders, the sample receives account, security, venue-mapping,
+and position data through the order connection. It receives prices through the
+market-data connection and uses risk-channel records to associate prices with
+securities.
+
+In Titan, the first account's **Account name** identifies the strategy to the
+services. The order-entry token gives access to accounts with that same name.
+If you rename an account, start a new session before running the sample.
+
+The token routes orders to the first configured venue. Use one execution venue
+with this sample, since it selects orders from all visible venue mappings.
+
+## Order selection and sizing
+
+The sample selects securities that have a definition, a venue mapping, a
+mapped account, and positive, finite ask prices and quantities. It submits a
+buy order for each eligible account, security, and venue combination, using:
+
+- Ask price field `25` as the limit price.
+- The smaller of ask quantity field `735` and one unit as the order quantity.
+- IOC time in force and the DMA algorithm.
+
+Orders follow sorted security/venue pairs, then ascending account identifier
+within each pair. Positions do not affect order selection or sizing.
+
 ## Recovery and timeouts
 
-Each invocation requests a full replay on both connections. The sample processes
-stream announcements and reference records, and accumulates price-field updates
-by channel. Risk-channel records link security identifiers to those channels.
-It waits for both advertised recovery counts before selecting its order batch.
-Historical replies are consumed before new orders are submitted.
-
-The first configured account's **Account name** supplies the connection's client and
-strategy identity. Each account's `Account.client` comes from its own name, so
-the order-entry token exposes only accounts whose names match the first
-account. New profiles start with a first account named `client`; saved names
-are used as entered. Renaming an account requires a new session.
+Each run requests a full replay on both connections. The sample waits until
+it has received the number of messages advertised by each server before
+selecting its order batch. Historical order replies do not complete the new
+batch.
 
 The sample sends transport heartbeats every ten seconds on both connections,
 including while waiting for reference data and prices.
 
-`--timeout` applies to connection setup, the handshake reply, and the batch's
-order-response deadline. The response deadline starts after the batch is
-submitted. There is no overall timeout for initial reference recovery or for
-waiting for eligible reference data and positive, finite prices and quantities.
-Press **Ctrl+C** to stop the sample while waiting.
+`--timeout` applies to connection setup, the handshake reply, and waiting for
+order responses. The order-response deadline starts after the batch is
+submitted. There is no overall timeout for initial recovery or for waiting for
+eligible reference data and prices. Press **Ctrl+C** to stop while waiting.
 
-Each invocation creates new order identifiers and submits its own single batch.
-The shared order-selection rules and expected output are in the
-[main README](../../README.md).
+Each run creates new order identifiers and submits one batch. It does not
+cancel or track outstanding orders from earlier runs.
+
+## Completion and output
+
+The sample prints the number of orders placed and subsequent order updates:
+
+```text
+Placed <COUNT> orders using live prices
+Order update: <EVENT>
+...
+Done
+```
+
+`Done` means every submitted order received a terminal fill, cancellation, or
+rejection. A `sess.failed` response stops the sample with an error. A forwarding
+failure can appear as an order-response timeout.
 
 ## Troubleshooting
 
@@ -99,9 +131,8 @@ The shared order-selection rules and expected output are in the
   token from the running session.
 - For a schema-version mismatch or decoding error, use schemas compatible with
   the running services.
-- If no orders are placed, check securities, accounts, venue mappings,
-  security-to-venue attributes, risk channels, and positive ask price and ask
-  quantity updates. The sample needs at least one eligible combination.
-- If order responses time out, inspect the session's fill-model and order-flow
-  diagnostics. Transport failures and malformed TCP frames close the connection;
-  details are in the [TCP protocol](../protocol/tcp.md).
+- If no orders are placed, check that the account is visible, that the security
+  is mapped to a venue and a price channel, and that positive ask prices and
+  quantities are available. At least one eligible combination is required.
+- If order responses time out, check the running session for forwarding or
+  execution failures, and confirm that only one execution venue is configured.

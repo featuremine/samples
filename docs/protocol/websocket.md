@@ -1,6 +1,6 @@
 # WebSocket Syncer Protocol Specification
 
-This specification defines the order syncer's WebSocket authentication,
+This specification defines the WebSocket order service's authentication,
 recovery, application messages, and connection behavior. See the
 [WebSocket API](../api/websocket.md) for integration, the [order API](../api/orders.md)
 for shared order fields, the [WebSocket strategy guide](../strategies/websocket.md)
@@ -12,29 +12,29 @@ Reference discovery and price queries use separate services, described in the
 
 ## Versions and Encoding
 
-Application binary messages contain packed Cap'n Proto
+Binary application messages contain packed Cap'n Proto
 `strategy/ManagerMessage` payloads from [strategy.capnp](../../strategy.capnp).
-WebSocket has no schema-version handshake. Use compatible application schemas
-for the server and client; the bundled [schema version](../../schemas_version.capnp)
-is **1.0.11**.
+There is no schema-version handshake. Clients and the service must use
+compatible application schemas. The bundled
+[schema version](../../schemas_version.capnp) is **1.0.11**.
 
-The server's initial recovery announcement is a JSON text message. Subsequent
-application responses use binary messages. WebSocket supplies its own framing;
-these payloads contain no Carnitas TCP envelope.
+The first application message from the server is a JSON text recovery
+announcement. Subsequent responses are binary messages. WebSocket supplies the
+framing; application messages contain no Carnitas TCP envelope.
 
 ## Connection and Authentication
 
-Connect to the order syncer's configured URL, normally
+Connect to the service URL, normally
 `ws://<HOST>:<WS_PORT>/`, with the complete token as the `Authorization` header
 value. A WebSocket subprotocol header is not required. Titan's default port is
-8034. Use WSS when a TLS endpoint is configured in front of the embedded service.
+8034. Use WSS when connecting through a TLS endpoint.
 
 | Upgrade result | Meaning |
 | ---: | --- |
 | HTTP 101 | WebSocket connection established |
 | HTTP 400 | Invalid `x-wssyncer-skipmessages` value |
 | HTTP 401 | Missing or unknown authorization token |
-| HTTP 500 | Server could not initialize the authorized route |
+| HTTP 500 | Internal server error |
 
 ## Recovery Announcement
 
@@ -44,54 +44,61 @@ The first application message from the server is a WebSocket **text** message:
 {"received": 0, "pending": 0}
 ```
 
-The example counts are illustrative. Both fields are nonnegative integer
-counts:
+Both fields are nonnegative integer counts; the zero values above are an
+example:
 
 | Field | Meaning |
 | --- | --- |
-| `received` | Historical client-request records received before the recovery snapshot boundary |
-| `pending` | Historical response records remaining after the requested skip offset at that boundary |
+| `received` | Records on the mapped request stream before the recovery snapshot boundary |
+| `pending` | Records on the mapped response stream remaining after the requested skip offset at that boundary |
+
+The token selects the request and response streams covered by these counts.
+They are not limited to the current WebSocket connection. Titan's TCP and
+WebSocket order-entry routes share the request stream, so TCP submissions also
+contribute to `received`.
 
 The optional `x-wssyncer-skipmessages` header supplies the number of historical
-responses to skip. Its value must contain decimal digits only and fit UInt64.
-Omitting the header requests all historical responses. A skip beyond available
-history follows live responses after recovery; it does not terminate the
-connection.
+responses to skip. A nonempty value must contain only decimal digits, have at
+most 31 characters, and fit UInt64. An omitted or empty value skips no
+responses. If the skip exceeds the available history, recovery completes with
+no pending replies and the connection follows live responses.
 
-Read `pending` binary application messages to consume the advertised replay,
-then continue reading live replies. The snapshot boundary is fixed, so live
-appends do not increase its `pending` count. Use `received` and retained request
-history when deciding which requests require retransmission. Neither count is
-an execution acknowledgement.
+Read `pending` binary application messages to finish the advertised replay,
+then continue reading live replies. The snapshot boundary is fixed: replies
+added afterward do not increase `pending`. Use `received` with a retained
+history of the request stream to decide which requests need retransmission.
+Neither count confirms execution of an order.
 
-The bundled WebSocket sample validates the initial announcement, consumes the
-pending replay, and discards historical replies before submitting its new
-batch. It does not impose a timeout on that pending replay after the initial
-announcement.
+Recovery and live replies cover the token's response stream. The separate
+OMS control/status channel is not included, so status messages sent only on
+that channel are absent from WebSocket replies.
+
+The bundled WebSocket sample validates the announcement and consumes the
+pending replies before submitting its new batch. It discards those historical
+replies and applies no timeout to the pending replay after the announcement.
 
 ## Application Messages
 
-Each nonempty client binary message contains one packed
-`strategy/ManagerMessage`. The server preserves the packed bytes. Server binary
-messages contain one packed response record each. There is no TCP magic,
-handshake header, data header, checksum, or stream announcement inside these
-WebSocket payloads.
+Send one packed `strategy/ManagerMessage` in each nonempty binary application
+message. Each binary response uses the same message format and contains one
+response record. Payloads contain no TCP magic, handshake header, data header,
+checksum, or stream announcement.
 
-WebSocket fragmentation is supported: a fragmented binary message is assembled
-as one application message. Empty client binary messages are ignored. Client
-text application messages are rejected.
+A binary message may span multiple WebSocket fragments. The fragments form one
+application message. Empty client binary messages are ignored; client text
+application messages are rejected.
 
-The assembled-payload cap is the server's YTP record payload limit. With the
-current 64-bit layout it is **8,388,496 bytes**; oversized messages close that
-session rather than being committed as partial requests.
+The 64-bit service accepts assembled binary payloads of up to
+**8,388,496 bytes**. This limit covers all fragments of a message. An oversized
+message closes that connection with code 1009; partial fragments are not
+submitted as separate requests.
 
 ## Ping/Pong and Close
 
-The server sends a Ping every **five seconds**. Clients must process control
-frames and reply with Pong as required by WebSocket. Continue receiving while
-performing REST discovery or price polling; `websocket-client` handles Ping
-when its receive loop runs. The supplied WebSocket sample keeps a receive
-worker active during those requests.
+The server schedules a Ping every **five seconds**. Delivery may be delayed
+while the connection is not writable. Clients must process control frames and
+answer Ping with Pong. Keep receiving during REST discovery and price polling;
+`websocket-client` handles Ping while its receive loop runs.
 
 | Close code | Meaning |
 | ---: | --- |
@@ -99,6 +106,6 @@ worker active during those requests.
 | 1009 | Assembled binary payload exceeded the server limit |
 | 1011 | A newer connection using the same token replaced this connection |
 
-Only the newest accepted connection for a token remains active. WebSocket
-transport errors and server-side failures can also terminate a connection.
+Only the newest accepted connection for a token remains active. Transport
+errors and server failures can also close the connection.
 

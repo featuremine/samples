@@ -1,17 +1,16 @@
 # Reference REST API
 
-The reference service exposes the latest reference data available to an
-authenticated client. The WebSocket strategy uses it to discover the same
-account/security/venue relationships that the TCP strategy receives as streams.
-See the [WebSocket integration guide](websocket.md) for its place in the
-order workflow and the [repository README](../../README.md) for run commands.
+Use the reference API to retrieve the accounts, securities, venues, positions,
+and limits available to your token. The responses include the relationships
+needed to select an account and venue for an order.
 
-Detailed sample behavior is documented in the [WebSocket strategy guide](../strategies/websocket.md).
+See the [WebSocket integration guide](websocket.md) for the connection workflow
+and the [WebSocket strategy guide](../strategies/websocket.md) to run the sample.
 
 ## Endpoint and Authentication
 
-The default Titan reference port is **8036**. Send a GET request with the
-profile's token as the complete `Authorization` header value:
+Send GET requests to Titan's reference port, **8036** by default. Put the
+complete profile token in the `Authorization` header:
 
 ```http
 GET /accounts HTTP/1.1
@@ -19,23 +18,24 @@ Host: <HOST>:<REFERENCE_PORT>
 Authorization: <TOKEN>
 ```
 
-No `Bearer ` prefix is added. Missing or unknown tokens return HTTP 400.
-Titan maps the profile tokens to the first configured account's **Account name**. Each
-account's `Account.client` is seeded from its own name, so only accounts whose
-names match the first account are in that token's scope. The first account's
-name is also the strategy identity used for order routing and all fill models.
-New profiles start with a first account named `client`; saved names are used as entered.
-Renaming an account changes its ownership and requires a new Titan session.
+Send the token without a `Bearer ` prefix. A missing or unknown token returns
+HTTP 400.
 
-Titan serves plain HTTP. Use HTTPS through a TLS endpoint when configured.
+The first account's **Account name** identifies your strategy in Titan. The
+token exposes accounts with matching names. Use the identifiers returned by
+reference discovery in the running session. After renaming an account, start
+a new session before requesting reference data.
+
+Use HTTP for Titan's embedded listener. Use HTTPS when connecting through an
+endpoint that provides TLS.
 
 ## Routes
 
-Successful responses have `Content-Type: application/json` and contain arrays
-of complete [reference-schema](../../reference.capnp) wrapper objects. For example,
-read an account from `record["message"]["account"]`.
+Successful responses have `Content-Type: application/json`. Each response is
+an array of [reference-schema](../../reference.capnp) messages, including their
+wrappers. For an account entry, read `record["message"]["account"]`.
 
-| GET path | Wrapper member | Selection and latest-record key |
+| GET path | Schema member | Returned records and identity |
 | --- | --- | --- |
 | `/accounts` | `RiskData.message.account` | Accounts whose `client` matches the authenticated client; keyed by `identifier` |
 | `/venueAccountMappings` | `VenueData.message.venueAccountMapping` | Mappings for accessible accounts; keyed by account `identifier` and `venueID` |
@@ -49,45 +49,52 @@ read an account from `record["message"]["account"]`.
 
 ## Visibility and Updates
 
-Account-to-venue mappings determine the accessible venues. Venue-to-security
-attributes determine the accessible securities. A missing venue or security
-definition is omitted from its definition endpoint. A valid token without
-assigned accounts receives empty scoped arrays and can still read
-`/limitMaster`.
+Your account-to-venue mappings determine which venues you can see.
+Venue-to-security attributes determine which securities you can see. A venue
+or security is omitted from its definition endpoint until its definition is
+available. A valid token with no assigned accounts receives empty scoped
+arrays, but can still read `/limitMaster`.
 
-Updates replace the corresponding cached record, including changes to an
-account's client assignment. Risk and marking limits retain separate entries
-for distinct symbol aggregations. Treat response array order as unspecified.
+Repeat a GET request to refresh your data. An update replaces the previous
+record with the same key. Account reassignments can change the records visible
+to your token. Risk and marking limits remain separate for different symbol
+aggregations. Use record identifiers rather than relying on array order.
 
-The server completes its initial reference snapshot before accepting requests.
-HEAD uses the same selection as GET and advertises its content length without
-a response body.
+During startup, a successful response can contain only part of the initial
+reference data. Check for the definitions your client needs and repeat the
+request until they are available. If records remain missing, check the token's
+account scope and the account, venue, and security relationships.
+
+Use HEAD on the same paths to obtain the selected response's content length
+without receiving its body.
 
 ## JSON Representation
 
-- Enums are JSON numbers.
-- Active void union members are `null`; inactive members are omitted.
-- Absent pointer fields are omitted; explicitly present empty text is `""`.
-- Nonfinite floating values are `null`.
-- A 64-bit integer is a JSON number when its JavaScript decimal number
-  representation preserves the original decimal text, and a decimal string
-  otherwise.
+- Enums are returned as JSON numbers.
+- Inactive union members are omitted. A selected void member has the value
+  `null`.
+- Unset text, struct, and list fields are omitted. An explicitly set empty
+  text value is `""`.
+- Nonfinite floating-point values are `null`.
+- A 64-bit integer is returned as a JSON number when JavaScript's shortest
+  decimal form of that number matches the original integer's decimal text.
+  Otherwise, it is returned as a decimal string.
 
-Normalize identifiers with `int(value)` in Python rather than assuming one
-JSON representation. Preserve the wrapper nesting when accessing fields; the
-API does not flatten the reference messages.
+In Python, use `int(value)` for identifiers to accept both numeric forms.
+Access fields through their message wrappers, as shown in the account example
+above.
 
 ## Status Codes and Limits
 
 | Status | Meaning |
 | ---: | --- |
 | 200 | Reference array returned, possibly empty |
-| 400 | Missing or unknown authorization token |
-| 404 | Unsupported path or method |
+| 400 | Missing or unknown token; check the `Authorization` header |
+| 404 | Unsupported path or method; use GET or HEAD on a route above |
 | 413 | Selected JSON response exceeds 32 MiB |
 | 500 | Response could not be assembled |
 
-The [WebSocket sample](../../ws-strategy.py) requests `/securities`, `/accounts`,
-`/venueAccountMappings`, `/venueSecurityAttributes`, and `/positions`. It then
-obtains quotes for eligible security identifiers from the
-[market-data REST API](market-data.md).
+The [WebSocket sample](../../ws-strategy.py) demonstrates discovery using
+`/securities`, `/accounts`, `/venueAccountMappings`, `/venueSecurityAttributes`,
+and `/positions`. Use the returned security identifiers to request quotes from
+the [market-data REST API](market-data.md).
