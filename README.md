@@ -52,9 +52,9 @@ defines the accounts, venues, securities, and price feed used by the samples.
 4. Start the session and keep it running while running a sample.
 
 The default **Host** listens on all IPv4 interfaces. When running the sample
-on the same machine, use its default `localhost`. For another **Host**, pass
-the configured address with `--host`. The profile tooltip shows the connection
-address and ports for each service.
+on the same machine, use its default `localhost`. When a different **Host**
+is configured in the Titan profile, pass the configured address with `--host`.
+The profile tooltip shows the connection address and ports for each service.
 
 In **Accounts**, the first account's **Account name** identifies the strategy
 to the services. The order-entry token gives access to accounts with that
