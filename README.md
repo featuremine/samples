@@ -18,7 +18,7 @@ The examples cover two ways to connect:
 
 ### Install dependencies
 
-* Python >=3.6
+* Python >=3.9
 
 For Debian-based systems use
 ```bash
