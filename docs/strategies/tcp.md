@@ -24,9 +24,8 @@ endpoint settings:
 python tcp-strategy.py --host "<HOST>" --port <ORDER_PORT> --market-port <MARKET_PORT> --token "<TOKEN>"
 ```
 
-For connection and recovery instructions, see the [TCP API](../api/tcp.md).
-The [TCP protocol](../protocol/tcp.md) specifies the message format, and the
-[strategy schema](../../strategy.capnp) defines order requests and responses.
+For connection, recovery, and message formats, see the [TCP API](../api/tcp.md).
+The [strategy schema](../../strategy.capnp) defines order requests and responses.
 
 ## Options
 

@@ -26,7 +26,7 @@ python ws-strategy.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_POR
 
 | Service | Default port | Documentation |
 | --- | --- | --- |
-| WebSocket orders | `8034` | [WebSocket API](../api/websocket.md) and [protocol](../protocol/websocket.md) |
+| WebSocket orders | `8034` | [WebSocket API](../api/websocket.md) |
 | REST prices | `8035` | [Market-data API](../api/market-data.md) |
 | REST reference data | `8036` | [Reference API](../api/reference.md) |
 
@@ -146,7 +146,7 @@ failure can appear as an order-response timeout.
   finite ask prices and ask quantities for eligible securities.
 - For REST errors other than the retried 503 status, see the
   [reference API](../api/reference.md) or [market-data API](../api/market-data.md).
-- If the WebSocket closes, check the [protocol's close codes](../protocol/websocket.md#pingpong-and-close).
+- If the WebSocket closes, check the [API guide's close codes](../api/websocket.md#pingpong-and-close).
   Only the newest connection accepted for a token remains active.
 - If order responses time out, check the running session for forwarding or
   execution failures, and confirm that only one execution venue is configured.

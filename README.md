@@ -107,10 +107,10 @@ overall startup deadline. Press **Ctrl+C** to stop while waiting.
 
 ## Documentation
 
-| Interface | Strategy guide | API guide | Protocol specification |
-| --- | --- | --- | --- |
-| Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp.md) | [TCP protocol](docs/protocol/tcp.md) |
-| WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/websocket.md) | [WebSocket protocol](docs/protocol/websocket.md) |
+| Interface | Strategy guide | API guide |
+| --- | --- | --- |
+| Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp.md) |
+| WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/websocket.md) |
 
 The [old strategy guide](docs/strategies/tcp-old.md) covers
 [ws-strategy-old.py](ws-strategy-old.py), its random target positions, and DAY
