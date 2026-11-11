@@ -21,6 +21,12 @@ python ws-strategy-old.py --token "<TOKEN>"
 Use the complete profile order-entry token. The script passes it directly in
 the reference requests' and WebSocket upgrade's `Authorization` header.
 
+For different endpoint settings:
+
+```sh
+python ws-strategy-old.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_PORT> --reference-port <REFERENCE_PORT> --token "<TOKEN>"
+```
+
 The [WebSocket API](../api/websocket.md) describes integration, the
 [WebSocket protocol](../protocol/websocket.md) defines recovery and framing,
 and the [order API](../api/orders.md) defines requests and responses.
@@ -29,7 +35,14 @@ and the [order API](../api/orders.md) defines requests and responses.
 
 | Option | Default | Purpose |
 | --- | --- | --- |
+| `--host` | `localhost` | Host shared by all three services |
+| `--port` | `8034` | WebSocket order-entry port |
+| `--market-port` | `8035` | REST price port |
+| `--reference-port` | `8036` | REST reference-data port |
 | `--token` | Required | Profile order-entry token |
+| `--schemas` | Script directory | Compatible Cap'n Proto schema directory |
+| `--timeout` | `30` seconds | Parsed but currently unused; see timeouts below |
+| `--tls` | Disabled | Use WSS and HTTPS for all three services |
 
 To list the command-line options:
 
@@ -37,26 +50,31 @@ To list the command-line options:
 python ws-strategy-old.py --help
 ```
 
-The host and ports are module constants at the top of the script:
+For Titan's default wildcard **Host**, the default `localhost` connects through
+loopback. For another **Host**, pass that configured address with `--host`.
 
-| Constant | Default | Purpose |
-| --- | --- | --- |
-| `HOST` | IPv4 loopback | Host shared by all three services |
-| `WS_PORT` | `8034` | WebSocket order-entry port |
-| `PRICES_PORT` | `8035` | REST price port |
-| `REST_PORT` | `8036` | REST reference-data port |
+Titan's embedded endpoints use plain WS and HTTP. When connecting through an
+endpoint providing TLS, add `--tls` to select WSS for orders and HTTPS for both
+REST services:
 
-For different endpoints, edit these constants to match the running session.
-For Titan's default wildcard **Host**, the script's loopback setting is
-appropriate. For another **Host**, use that configured address. Endpoints use
-plain WS and HTTP; endpoint overrides and TLS are not command-line options.
+```sh
+python ws-strategy-old.py --token "<TOKEN>" --tls
+```
 
 ## Schemas and discovery
 
-The script loads [strategy.capnp](../../strategy.capnp) from its own directory,
-including when invoked from another working directory. Keep the imported
-schema files alongside it. There is no schema-directory option or WebSocket
-schema-version handshake, so the bundled schema must match the running service.
+The script loads [strategy.capnp](../../strategy.capnp) from `--schemas`, which
+defaults to the directory containing the script, including when invoked from
+another working directory. Keep the imported schema files alongside it. To use
+another compatible schema set:
+
+```sh
+python ws-strategy-old.py --token "<TOKEN>" --schemas "<SCHEMA_DIRECTORY>"
+```
+
+A relative `--schemas` path is resolved from the terminal's working directory.
+There is no WebSocket schema-version handshake, so the selected schema must be
+compatible with the running service.
 
 Reference discovery uses authenticated GET requests to `/accounts`, `/venues`,
 `/securities`, `/venueSecurityAttributes`, `/venueAccountMappings`, and
@@ -104,9 +122,11 @@ numeric `sess.exec` filled and partially-filled quantities to its recovered
 position totals, applying the order side's sign. It does not process `exec2`
 fills for this calculation.
 
-WebSocket operations use a ten-second socket timeout. REST calls specify no
-timeout and perform no retries; HTTP errors, including startup recovery errors,
-are raised immediately. There is no overall batch-completion deadline.
+The `--timeout` option is accepted with a default of `30`, but the current
+script does not apply its value. WebSocket operations still use a fixed
+ten-second socket timeout. REST calls specify no timeout and perform no retries;
+HTTP errors, including startup recovery errors, are raised immediately. There
+is no overall batch-completion deadline.
 
 Each invocation chooses new targets and creates new order identifiers. It does
 not cancel or track outstanding orders from earlier invocations.
@@ -136,8 +156,9 @@ after `Done` and after the WebSocket connection closes.
 
 - For an import error, install the shared requirements and the additional
   `requests` dependency in the active virtual environment.
-- For connection errors, check `HOST` and the three port constants against the
-  running session's endpoints.
+- For connection errors, check `--host`, `--port`, `--market-port`, and
+  `--reference-port` against the running session's endpoints. With `--tls`, all
+  three endpoints must provide TLS.
 - For authentication errors, copy the complete order-entry token from Titan.
 - For a price-request error or a stalled initial query, check the server's
   GET-with-body support and its startup recovery status. The script has no

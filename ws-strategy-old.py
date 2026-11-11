@@ -12,24 +12,27 @@ import capnp # type: ignore[import-untyped]
 from os.path import dirname, realpath, join
 import math
 import argparse
-
-HOST: str = "127.0.0.1"
-REST_PORT: int = 8036
-WS_PORT: int = 8034
-PRICES_PORT: int = 8035
+from pathlib import Path
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="localhost")
+    parser.add_argument("--port", type=int, default=8034)
+    parser.add_argument("--market-port", type=int, default=8035)
+    parser.add_argument("--reference-port", type=int, default=8036)
     parser.add_argument("--token", required=True, help="Order-entry token shown in Titan Profile configuration")
+    parser.add_argument("--schemas", type=Path, default=Path(__file__).resolve().parent,
+                        help="Schema directory (default: the directory containing this script)")
+    parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--tls", action="store_true", help="Use WSS and HTTPS through a TLS endpoint")
     args = parser.parse_args()
 
-    strategy_dir: str = dirname(realpath(__file__))
-    path: str = join(strategy_dir, 'strategy.capnp')
-    spec: Any = capnp.load(path)
+    spec: Any = capnp.load(str(args.schemas / 'strategy.capnp'))
 
+    scheme = "https" if args.tls else "http"
     response: requests.Response = requests.get(
-        f"http://{HOST}:{REST_PORT}/accounts", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/accounts", headers={"authorization": args.token}
     )
     response.raise_for_status()
     accounts: List[int] = [entry["message"]["account"]["identifier"] for entry in response.json()]
@@ -37,7 +40,7 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find account definitions. Please reach out to FM team.")
 
     response = requests.get(
-        f"http://{HOST}:{REST_PORT}/venues", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/venues", headers={"authorization": args.token}
     )
     response.raise_for_status()
     venues: List[int] = [entry["message"]["venue"]["identifier"] for entry in response.json()]
@@ -45,7 +48,7 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find venue definitions. Please reach out to FM team.")
 
     response = requests.get(
-        f"http://{HOST}:{REST_PORT}/securities", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/securities", headers={"authorization": args.token}
     )
     response.raise_for_status()
     securityDefinitions: Dict[int, Dict[str, Any]] = {
@@ -56,7 +59,7 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find security definitions. Please reach out to FM team.")
 
     response = requests.get(
-        f"http://{HOST}:{REST_PORT}/venueSecurityAttributes", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/venueSecurityAttributes", headers={"authorization": args.token}
     )
     response.raise_for_status()
     venueSecurityAttributes: Dict[int, List[int]] = {
@@ -73,7 +76,7 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find venueSecurityAttributes. Please reach out to FM team.")
 
     response = requests.get(
-        f"http://{HOST}:{REST_PORT}/venueAccountMappings", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/venueAccountMappings", headers={"authorization": args.token}
     )
     response.raise_for_status()
     venueAccountMappings: Dict[int, List[int]] = {
@@ -90,7 +93,7 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find venueAccountMappings. Please reach out to FM team.")
 
     response = requests.get(
-        f"http://{HOST}:{REST_PORT}/positions", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/positions", headers={"authorization": args.token}
     )
     response.raise_for_status()
     positions: Dict[Tuple[int, int], int] = {(entry["message"]["position"]["accountId"], entry["message"]["position"]["securityId"]): entry["message"]["position"]["quantity"] for entry in response.json()}
@@ -99,7 +102,7 @@ if __name__ == "__main__":
     found: Set[int] = set()
 
     response = requests.get(
-        f"http://{HOST}:{PRICES_PORT}/api/prices",
+        f"{scheme}://{args.host}:{args.market_port}/api/prices",
         headers={"Content-Type": "text/plain; charset=us-ascii"},
         data="22 25\n" + "\n".join(str(secid) for secid in venueSecurityAttributes.keys()) + "\n"
     )
@@ -151,8 +154,9 @@ if __name__ == "__main__":
     }
     filled: Dict[Tuple[int, int], float] = {}
 
+    scheme = "wss" if args.tls else "ws"
     wsc: ws.WebSocket = ws.create_connection(
-        url=f"ws://{HOST}:{WS_PORT}",
+        url=f"{scheme}://{args.host}:{args.port}",
         header={"authorization": args.token},
         timeout=10.0,
     )
