@@ -283,7 +283,8 @@ def encode_ioc(account_id, security_id, venue_id, ask, ask_quantity):
     return order_id, message.to_bytes_packed()
 ```
 
-Use a distinct `strgOrdID` for each new order and retain it to match replies.
+Use a distinct `strgOrdID` for each new order from your client and retain it
+to match replies.
 The current samples check for identifier collisions within their pending
 batch. The identifiers in `Place` are signed 64-bit integers. Supply a finite,
 positive quantity and a finite limit price; the IOC examples also require a

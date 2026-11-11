@@ -9,9 +9,9 @@ For setup and run commands, see the [repository README](../../README.md) and
 
 ## Services and Authentication
 
-Start a Titan session and use its connect address, service ports, and
-client's **order-entry token**. The profile's **Connections** settings configure these
-services:
+Start a Titan session and use its connect address and service ports with your
+client's **order-entry token**. The profile's **Connections** settings configure
+these services:
 
 | Service | Default port | Contract |
 | --- | ---: | --- |
@@ -170,7 +170,8 @@ for text prices and quantities. Support depends on the OMS or execution service.
 The TCP guide's [order encoder](tcp-carnitas.md#sending-orders) constructs the same
 packed payload; send the returned bytes as a binary WebSocket message.
 
-Use a distinct `strgOrdID` for each new order and retain it to match replies.
+Use a distinct `strgOrdID` for each new order from your client and retain it
+to match replies.
 Cancel and replace requests use the existing order's identifier; see
 [cancel and replace](tcp-carnitas.md#cancel-and-replace) for the shared request fields.
 

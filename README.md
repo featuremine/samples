@@ -25,7 +25,7 @@ For Debian-based systems use
 apt-get install -y git python3
 ```
 
-for Redhat-based systems use
+For Redhat-based systems use
 ```bash
 dnf install -y git python3
 ```
@@ -68,15 +68,16 @@ defines the accounts, venues, securities, and price feed used by the samples.
 3. Check **Host** and the service ports in **Connections**.
 4. Start the session and keep it running while running a sample.
 
-The default **Host** listens on all IPv4 interfaces. When running the sample
-on the same machine, use its default `localhost`. When a different **Host**
-is configured in the Titan profile, pass the configured address with `--host`.
+When a custom **Host** is configured in the Titan profile, please provide the
+configured address with `--host` when running the strategy.
 The profile tooltip shows the connection address and ports for each service.
 
 In **Accounts**, each client has its own identity, order-entry token, and one
 or more accounts. A client's token gives access to its accounts and order
-channels. Account names are labels and do not determine ownership. Start a
-new session after changing client identities or account definitions.
+channels. New sessions publish the configured account name as
+`VenueAccountMapping.venueAccount`, the broker account field. The parent client
+determines ownership and routing. Start a new session after changing client
+identities or account definitions; existing recordings remain unchanged.
 
 The token routes orders to the first configured venue. The samples select
 orders from all visible venue mappings, so use one execution venue.

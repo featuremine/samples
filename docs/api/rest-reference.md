@@ -23,10 +23,11 @@ HTTP 400.
 
 Each client in Titan's **Accounts** section has its own name, order-entry token,
 and accounts. The token identifies that client and exposes only its accounts.
-An account's `Account.client` is its owning client's name, independently of its
-account display name. Use the identifiers returned by reference discovery in
-the running session. Start a new session after changing client identities or
-account definitions.
+An account's `Account.client` is its owning client's name. New sessions publish
+the configured account name as `VenueAccountMapping.venueAccount`, the broker
+account field. Use the identifiers returned by reference discovery in the
+running session. Start a new session after changing client identities or
+account definitions; existing recordings remain unchanged.
 
 Use HTTP for Titan's embedded listener. Use HTTPS when connecting through an
 endpoint that provides TLS.
