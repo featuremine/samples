@@ -44,7 +44,7 @@ For connection, recovery, and message formats, see the
 | `--port` | `8034` | WebSocket order-entry port |
 | `--market-port` | `8035` | REST price port |
 | `--reference-port` | `8036` | REST reference-data port |
-| `--token` | Required | Profile order-entry token |
+| `--token` | Required | Client order-entry token |
 | `--schemas` | Script directory | Compatible Cap'n Proto schema directory |
 | `--timeout` | `30` seconds | Does not change this sample's timeouts; see below |
 | `--tls` | Disabled | Use WSS and HTTPS for all three services |
@@ -96,9 +96,10 @@ check that the server accepts the old script's GET-with-body form.
 The returned prices do not determine which orders are placed, their limit
 prices, or their quantities.
 
-In Titan, the first account's **Account name** identifies the strategy to the
-services. The order-entry token gives access to accounts with that same name.
-If you rename an account, start a new session before running the sample.
+In Titan's **Accounts** section, copy the token for the client you want to use.
+It gives access to that client's accounts and order channels. Account display
+names do not determine ownership. Start a new session after changing client
+identities or account definitions.
 
 The token routes orders to the first configured venue. Use one execution venue
 with this sample, since it selects orders from all visible venue mappings.

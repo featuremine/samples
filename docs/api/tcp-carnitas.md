@@ -18,13 +18,13 @@ connection. Use the host and ports from the profile's **Connections** settings:
 | Orders and reference data | 8032 | Reference definitions, account/venue mappings, order requests and responses |
 | Market data | 8033 | Stream announcements and Elektron price updates |
 
-Authenticate both connections with the profile's **Order-entry token**. Include
+Authenticate both connections with your client's **Order-entry token**. Include
 its complete 256 ASCII bytes in the client handshake. The sample uses plain TCP
 and has no TLS option.
 
-The first account's **Account name** identifies your strategy in Titan. The
-token exposes accounts with matching names. Use the identifiers returned by
-reference discovery in the running session.
+Each client in Titan's **Accounts** section has its own name, order-entry token,
+and accounts. The token identifies that client and exposes only its accounts.
+Use the identifiers returned by reference discovery in the running session.
 
 The token routes orders to the first configured venue. Use one execution venue
 when running the bundled samples, since they select orders from all visible
@@ -98,7 +98,7 @@ Send a **280-byte** client handshake with a common-header payload size of
 | Token | 16 | 256 | Token bytes, with no delimiter or terminator |
 | Recovery count | 272 | 8 | UInt64 count of previously received selected server records |
 
-Include the profile's complete 256-byte ASCII order-entry token. Set the
+Include your client's complete 256-byte ASCII order-entry token. Set the
 recovery count to zero to receive all selected records from the beginning. A
 recovery count greater than the available selected-record count closes the
 connection.

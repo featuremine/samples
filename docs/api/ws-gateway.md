@@ -10,7 +10,7 @@ For setup and run commands, see the [repository README](../../README.md) and
 ## Services and Authentication
 
 Start a Titan session and use its connect address, service ports, and
-**order-entry token**. The profile's **Connections** settings configure these
+client's **order-entry token**. The profile's **Connections** settings configure these
 services:
 
 | Service | Default port | Contract |
@@ -38,9 +38,9 @@ status codes:
 | HTTP 401 | Missing or unknown authorization token |
 | HTTP 500 | Internal server error |
 
-The first account's **Account name** identifies your strategy in Titan. The
-token exposes accounts with matching names. Use the identifiers returned by
-reference discovery in the running session.
+Each client in Titan's **Accounts** section has its own name, order-entry token,
+and accounts. The token identifies that client and exposes only its accounts.
+Use the identifiers returned by reference discovery in the running session.
 
 The order-entry token routes orders to the first configured venue.
 Submit orders for that venue; changing `venueID` does not select another route.

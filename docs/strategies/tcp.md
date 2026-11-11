@@ -17,7 +17,7 @@ and the Titan session running:
 python tcp-strategy.py --token "<TOKEN>"
 ```
 
-Both connections use the same host and profile order-entry token. For different
+Both connections use the same host and client order-entry token. For different
 endpoint settings:
 
 ```sh
@@ -34,7 +34,7 @@ The [strategy schema](../../strategy.capnp) defines order requests and responses
 | `--host` | `localhost` | Host for both connections |
 | `--port` | `8032` | Carnitas order-entry port |
 | `--market-port` | `8033` | Carnitas market-data port |
-| `--token` | Required | Profile order-entry token |
+| `--token` | Required | Client order-entry token |
 | `--schemas` | Script directory | Compatible Cap'n Proto schema directory |
 | `--timeout` | `30` seconds | Connection, handshake, and order-response timeout |
 
@@ -68,9 +68,10 @@ and position data through the order connection. It receives prices through the
 market-data connection and uses risk-channel records to associate prices with
 securities.
 
-In Titan, the first account's **Account name** identifies the strategy to the
-services. The order-entry token gives access to accounts with that same name.
-If you rename an account, start a new session before running the sample.
+In Titan's **Accounts** section, copy the token for the client you want to use.
+It gives access to that client's accounts and order channels. Account display
+names do not determine ownership. Start a new session after changing client
+identities or account definitions.
 
 The token routes orders to the first configured venue. Use one execution venue
 with this sample, since it selects orders from all visible venue mappings.

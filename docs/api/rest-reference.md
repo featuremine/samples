@@ -10,7 +10,7 @@ and the [WebSocket strategy guide](../strategies/websocket.md) to run the sample
 ## Endpoint and Authentication
 
 Send GET requests to Titan's reference port, **8036** by default. Put the
-complete profile token in the `Authorization` header:
+complete client order-entry token in the `Authorization` header:
 
 ```http
 GET /accounts HTTP/1.1
@@ -21,10 +21,12 @@ Authorization: <TOKEN>
 Send the token without a `Bearer ` prefix. A missing or unknown token returns
 HTTP 400.
 
-The first account's **Account name** identifies your strategy in Titan. The
-token exposes accounts with matching names. Use the identifiers returned by
-reference discovery in the running session. After renaming an account, start
-a new session before requesting reference data.
+Each client in Titan's **Accounts** section has its own name, order-entry token,
+and accounts. The token identifies that client and exposes only its accounts.
+An account's `Account.client` is its owning client's name, independently of its
+account display name. Use the identifiers returned by reference discovery in
+the running session. Start a new session after changing client identities or
+account definitions.
 
 Use HTTP for Titan's embedded listener. Use HTTPS when connecting through an
 endpoint that provides TLS.

@@ -14,9 +14,25 @@ The examples cover two ways to connect:
 - [WebSocket strategy](ws-strategy.py): uses the WebSocket API for orders and
   the REST APIs for reference data and prices.
 
-## Set up Python
+## Requirements
 
-Use Python 3.9 or newer with `pip` and `venv`. Run these commands from the
+### Install dependencies
+
+* Python >=3.6
+
+For Debian-based systems use
+```bash
+apt-get install -y git python3
+```
+
+for Redhat-based systems use
+```bash
+dnf install -y git python3
+```
+
+### Set up virtual environment
+
+To set up a virtual environment you may run the following commands from the
 repository root, where both strategy scripts and `requirements.txt` are located.
 
 Create and activate a virtual environment on macOS or Linux:
@@ -47,7 +63,8 @@ defines the accounts, venues, securities, and price feed used by the samples.
 
 1. Create or open a Titan profile and configure its accounts, venues, securities,
    and price feed. Use one execution venue with these samples.
-2. In **Profile configuration**, reveal and copy **Order-entry token**.
+2. In **Accounts**, select the client whose accounts you want to use, then
+   reveal and copy that client's **Order-entry token**.
 3. Check **Host** and the service ports in **Connections**.
 4. Start the session and keep it running while running a sample.
 
@@ -56,10 +73,10 @@ on the same machine, use its default `localhost`. When a different **Host**
 is configured in the Titan profile, pass the configured address with `--host`.
 The profile tooltip shows the connection address and ports for each service.
 
-In **Accounts**, the first account's **Account name** identifies the strategy
-to the services. The order-entry token gives access to accounts with that
-same name. If you rename an account, start a new session before running a
-sample.
+In **Accounts**, each client has its own identity, order-entry token, and one
+or more accounts. A client's token gives access to its accounts and order
+channels. Account names are labels and do not determine ownership. Start a
+new session after changing client identities or account definitions.
 
 The token routes orders to the first configured venue. The samples select
 orders from all visible venue mappings, so use one execution venue.
@@ -80,7 +97,7 @@ unit. The strategy guides describe how accounts, securities, and venues are
 selected.
 
 With the virtual environment active and the Titan session running, choose a
-sample. Replace `<TOKEN>` with the complete order-entry token from that session.
+sample. Replace `<TOKEN>` with the complete order-entry token for your client.
 
 ### TCP
 
