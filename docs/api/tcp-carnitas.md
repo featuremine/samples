@@ -18,7 +18,7 @@ connection. Use the host and ports from the profile's **Connections** settings:
 | Orders and reference data | 8032 | Reference definitions, account/venue mappings, order requests and responses |
 | Market data | 8033 | Stream announcements and Elektron price updates |
 
-Authenticate both connections with your client's **Order-entry token**. Include
+Authenticate both connections with your **Order-entry token**. Include
 its complete 256 ASCII bytes in the client handshake. The sample uses plain TCP
 and has no TLS option.
 
@@ -98,7 +98,7 @@ Send a **280-byte** client handshake with a common-header payload size of
 | Token | 16 | 256 | Token bytes, with no delimiter or terminator |
 | Recovery count | 272 | 8 | UInt64 count of previously received selected server records |
 
-Include your client's complete 256-byte ASCII order-entry token. Set the
+Include your complete 256-byte ASCII order-entry token. Set the
 recovery count to zero to receive all selected records from the beginning. A
 recovery count greater than the available selected-record count closes the
 connection.
@@ -283,8 +283,8 @@ def encode_ioc(account_id, security_id, venue_id, ask, ask_quantity):
     return order_id, message.to_bytes_packed()
 ```
 
-Use a distinct `strgOrdID` for each new order from your client and retain it
-to match replies.
+Use a distinct `strgOrdID` for each new order you submit under the same client
+identity, across all connections. Retain it to match replies.
 The current samples check for identifier collisions within their pending
 batch. The identifiers in `Place` are signed 64-bit integers. Supply a finite,
 positive quantity and a finite limit price; the IOC examples also require a

@@ -10,7 +10,7 @@ For setup and run commands, see the [repository README](../../README.md) and
 ## Services and Authentication
 
 Start a Titan session and use its connect address and service ports with your
-client's **order-entry token**. The profile's **Connections** settings configure
+**order-entry token**. The profile's **Connections** settings configure
 these services:
 
 | Service | Default port | Contract |
@@ -49,8 +49,8 @@ Submit orders for that venue; changing `venueID` does not select another route.
 
 Binary application messages contain packed Cap'n Proto
 `strategy/ManagerMessage` payloads from [strategy.capnp](../../strategy.capnp).
-There is no schema-version handshake. Clients and the service must use
-compatible application schemas. The bundled
+There is no schema-version handshake. Use application schemas compatible with
+the service. The bundled
 [schema version](../../schemas_version.capnp) is **1.0.11**.
 
 The first application message from the server is a JSON text recovery
@@ -170,8 +170,8 @@ for text prices and quantities. Support depends on the OMS or execution service.
 The TCP guide's [order encoder](tcp-carnitas.md#sending-orders) constructs the same
 packed payload; send the returned bytes as a binary WebSocket message.
 
-Use a distinct `strgOrdID` for each new order from your client and retain it
-to match replies.
+Use a distinct `strgOrdID` for each new order you submit under the same client
+identity, across all connections. Retain it to match replies.
 Cancel and replace requests use the existing order's identifier; see
 [cancel and replace](tcp-carnitas.md#cancel-and-replace) for the shared request fields.
 
@@ -194,8 +194,8 @@ order-response timeout.
 ## Ping/Pong and Close
 
 The server schedules a Ping every **five seconds**. Delivery may be delayed
-while the connection is not writable. Clients must process control frames and
-answer Ping with Pong. Keep receiving during REST discovery and price polling;
+while the connection is not writable. Process control frames and answer Ping
+with Pong. Keep receiving during REST discovery and price polling;
 `websocket-client` handles Ping while its receive loop runs.
 
 | Close code | Meaning |

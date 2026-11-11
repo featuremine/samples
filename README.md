@@ -98,7 +98,7 @@ unit. The strategy guides describe how accounts, securities, and venues are
 selected.
 
 With the virtual environment active and the Titan session running, choose a
-sample. Replace `<TOKEN>` with the complete order-entry token for your client.
+sample. Replace `<TOKEN>` with your complete order-entry token.
 
 ### TCP
 

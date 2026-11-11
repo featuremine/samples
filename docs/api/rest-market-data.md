@@ -56,7 +56,7 @@ checks and use the smaller of the ask quantity and one unit. See the
 
 Retry HTTP 503 responses while startup data loads. A successful response can
 still contain only part of the initial data, so repeat the query if the fields
-your strategy needs are missing. Each query reads the current cached values;
+you need are missing. Each query reads the current cached values;
 repeat queries as needed to obtain market-data updates.
 
 ## Status Codes and Limits

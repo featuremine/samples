@@ -1,8 +1,7 @@
 # Reference REST API
 
-Use the reference API to retrieve the accounts, securities, venues, positions,
-and limits available to your token. The responses include the relationships
-needed to select an account and venue for an order.
+Use the reference API to retrieve the securities available at each venue,
+the accounts configured to trade there, and account positions and limits.
 
 See the [WebSocket integration guide](ws-gateway.md) for the connection workflow
 and the [WebSocket strategy guide](../strategies/websocket.md) to run the sample.
@@ -64,7 +63,7 @@ to your token. Risk and marking limits remain separate for different symbol
 aggregations. Use record identifiers rather than relying on array order.
 
 During startup, a successful response can contain only part of the initial
-reference data. Check for the definitions your client needs and repeat the
+reference data. Check for the definitions you need and repeat the
 request until they are available. If records remain missing, check the token's
 account scope and the account, venue, and security relationships.
 
