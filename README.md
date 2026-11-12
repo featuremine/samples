@@ -63,24 +63,35 @@ Titan provides the local test environment used in this guide. It runs the
 TCP, WebSocket, and REST services and simulates order execution. Your profile
 defines the accounts, venues, securities, and price feed used by the samples.
 
-1. Create or open a Titan profile and configure its accounts, venues, securities,
-   and price feed. Use one execution venue with these samples.
-2. In **Accounts**, select the client whose accounts you want to use, then
-   reveal and copy that client's **Order-entry token**.
-3. Check **Host** and the service ports in **Connections**.
-4. Start the session and keep it running while running a sample.
+### Create a new session
 
-For a custom **Host**, pass that address with `--host` when running the strategy.
-The profile tooltip shows the connection address and ports for each service.
+Open Titan. In **Sessions**, enter a new name in **Search or name a session**,
+then click **Create** to choose a profile.
 
-Each client has its own token and one or more accounts. The token gives access
-to that client's accounts and order channels. Start a new session after
-changing client identities or account definitions; existing recordings remain
-unchanged. The [Reference REST API](docs/api/rest-reference.md) explains how
-account names and ownership appear in reference data.
+### Select and configure a profile
 
-The token routes orders to the first configured venue. The samples select
-orders from all visible venue mappings, so use one execution venue.
+Select a saved profile, or click **Add profile** and enter a **Profile name**.
+Use the following setup for these samples:
+
+- In **Venues**, add **Kraken** if it is not already configured: select it from
+  **Venue** and click **+**. Use **Search pairs** to find and select `XBT/USD`
+  and `XBT/EUR`. Use one venue for these samples.
+- In **Accounts**, use the client already included in a new profile. Set the
+  **Account name** for the account you want to use, or click **Add account** to
+  add more accounts under the same client. Click **Copy token** beside its
+  **Order-entry token** to copy the token you will use with the strategy.
+- In **Connections**, keep the default **Host** and ports when running the
+  strategy on the same computer as Titan. If you change them, use those
+  settings when running the strategy.
+
+### Start the session and connect a strategy
+
+Click **Create** in the profile header to save the profile and start the
+session. Then follow [Run a strategy](#run-a-strategy) using the token you
+copied. Keep the session running while you run the sample.
+
+For a custom **Host**, pass that address with `--host`. The profile tooltip
+shows the connection address and ports for each service. The default ports are:
 
 | Service | Default port | Sample |
 | --- | --- | --- |
