@@ -23,7 +23,7 @@ The examples cover two ways to connect:
 On Debian-based systems, install Python:
 
 ```bash
-apt-get install -y python3
+apt-get install -y python3 python3-venv
 ```
 
 On Red Hat-based systems, install Python:
