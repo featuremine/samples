@@ -66,20 +66,22 @@ defines the accounts, venues, securities, and price feed used by the samples.
 ### Create a new session
 
 Open Titan. In **Sessions**, enter a new name in **Search or name a session**,
-then click **Create** to choose a profile.
+then click **Create** to begin setting up a new session. Next, create or
+choose a profile.
 
 ### Select and configure a profile
 
-Select a saved profile, or click **Add profile** and enter a **Profile name**.
+Use one of your existing profiles or click **Add profile** and enter a **Profile name** to create a new one.
 Use the following setup for these samples:
 
-- In **Venues**, add **Kraken** if it is not already configured: select it from
-  **Venue** and click **+**. Use **Search pairs** to find and select `XBT/USD`
-  and `XBT/EUR`. Use one venue for these samples.
-- In **Accounts**, use the client already included in a new profile. Set the
-  **Account name** for the account you want to use, or click **Add account** to
-  add more accounts under the same client. Click **Copy token** beside its
-  **Order-entry token** to copy the token you will use with the strategy.
+- In **Venues**, add **Kraken** if it is not already configured: select it
+  from the **Venue** list and click **+**. Use **Search pairs** to find and
+  select the pairs you would like to test, such as `XBT/USD` and `XBT/EUR`.
+  Use one venue for these samples.
+- In **Accounts**, configure the accounts you want to use under the existing
+  client. You can rename the client or its accounts if desired. Then click
+  **Copy token** next to **Order-entry token**. Use this token to connect your
+  strategy to Titan.
 - In **Connections**, keep the default **Host** and ports when running the
   strategy on the same computer as Titan. If you change them, use those
   settings when running the strategy.
@@ -87,8 +89,9 @@ Use the following setup for these samples:
 ### Start the session and connect a strategy
 
 Click **Create** in the profile header to save the profile and start the
-session. Then follow [Run a strategy](#run-a-strategy) using the token you
-copied. Keep the session running while you run the sample.
+session. Then follow the steps in the [Run a strategy](#run-a-strategy)
+section using the token you copied. Keep the Titan session running while your
+strategy is connected.
 
 For a custom **Host**, pass that address with `--host`. The profile tooltip
 shows the connection address and ports for each service. The default ports are:
