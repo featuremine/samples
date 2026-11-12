@@ -20,16 +20,16 @@ The examples cover two ways to connect:
 
 - Python 3.9 or later
 
-On Debian-based systems, install Git and Python:
+On Debian-based systems, install Python:
 
 ```bash
-apt-get install -y git python3
+apt-get install -y python3
 ```
 
-On Red Hat-based systems, install Git and Python:
+On Red Hat-based systems, install Python:
 
 ```bash
-dnf install -y git python3
+dnf install -y python3
 ```
 
 ### Set up a virtual environment
