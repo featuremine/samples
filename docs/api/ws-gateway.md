@@ -1,23 +1,23 @@
-# WebSocket API — Integration Guide
+# WebSocket API — Integration guide
 
-This guide describes how to submit orders and receive responses over WebSocket,
-using REST for reference data and prices. Order messages use the same Cap'n
-Proto schema as the TCP API.
+Use the WebSocket API to submit orders and receive responses. Retrieve reference
+data and prices through the REST APIs. Order messages use the same Cap'n Proto
+schema as the TCP API.
 
 For setup and run commands, see the [repository README](../../README.md) and
 [WebSocket strategy guide](../strategies/websocket.md).
 
-## Services and Authentication
+## Services and authentication
 
 Start a Titan session and use its connect address and service ports with your
-**order-entry token**. The profile's **Connections** settings configure
+**Order-entry token**. The profile's **Connections** settings configure
 these services:
 
-| Service | Default port | Contract |
+| Service | Default port | Purpose |
 | --- | ---: | --- |
 | WebSocket orders | 8034 | Packed `strategy/ManagerMessage` requests and replies |
-| REST market prices | 8035 | [ASCII field/value queries](rest-market-data.md) |
-| REST reference data | 8036 | [Authenticated reference JSON](rest-reference.md) |
+| REST market data | 8035 | Price field/value queries through the [Market data REST API](rest-market-data.md) |
+| REST reference data | 8036 | Account, venue, and security discovery through the [Reference REST API](rest-reference.md) |
 
 Titan's embedded endpoints use plain WS/HTTP. Use WSS/HTTPS when connecting
 through a TLS endpoint. In the bundled sample, `--tls` switches all three
@@ -45,49 +45,49 @@ Use the identifiers returned by reference discovery in the running session.
 The order-entry token routes orders to the first configured venue.
 Submit orders for that venue; changing `venueID` does not select another route.
 
-## Versions and Encoding
+## Versions and encoding
 
 Binary application messages contain packed Cap'n Proto
 `strategy/ManagerMessage` payloads from [strategy.capnp](../../strategy.capnp).
 There is no schema-version handshake. Use application schemas compatible with
 the service. The bundled
-[schema version](../../schemas_version.capnp) is **1.0.11**.
+[schema version](../../schemas_version.capnp) is 1.0.11.
 
 The first application message from the server is a JSON text recovery
 announcement. Subsequent responses are binary messages. WebSocket supplies the
 framing; application messages contain no Carnitas TCP envelope.
 
-## Integration Stages
+## Integration stages
 
-**1. Connect and authenticate.** Open a WebSocket connection to
-`ws://<HOST>:<WS_PORT>/` using the complete token header.
+1. Connect and authenticate. Open a WebSocket connection to
+   `ws://<HOST>:<WS_PORT>/` using the complete token header.
 
-**2. Recover.** Read the initial text message containing `received` and
-`pending`. Then read `pending` binary replies to complete recovery before
-submitting new orders. These counts cover the streams selected by the token;
-the [recovery announcement](#recovery-announcement) defines their scope,
-replay offsets, and use for retransmission.
+2. Recover. Read the initial text message containing `received` and
+   `pending`. Then read `pending` binary replies to complete recovery before
+   submitting new orders. See [Recovery announcement](#recovery-announcement)
+   for the counts, skip offset, and retransmission rules.
 
-**3. Discover reference data.** Request accounts, security definitions,
-account/venue mappings, venue/security attributes, and positions from the
-[reference REST API](rest-reference.md). Match these records to find eligible
-account/security/venue combinations for the configured route.
+3. Discover reference data. Request accounts, security definitions,
+   account/venue mappings, venue/security attributes, and positions from the
+   [Reference REST API](rest-reference.md). Use these records to find accounts
+   and securities configured for the venue on your order route.
 
-**4. Obtain prices.** Request FIDs 25 and 735 for the eligible numeric security
-identifiers from the [price REST API](rest-market-data.md). Retry HTTP 503
-while the price service loads its initial data. Check that prices
-and quantities are finite and positive before using them in an order.
+4. Obtain prices. Request ask price field identifier (FID) `25` and ask quantity
+   FID `735` for those numeric security identifiers from the
+   [Market data REST API](rest-market-data.md). Retry HTTP 503 while the price
+   service loads its initial data. Check that prices and quantities are finite
+   and positive before using them in an order.
 
-**5. Send and receive application messages.** Send one packed `ManagerMessage`
-per binary WebSocket message. Keep receiving while sending a batch, and retain
-responses that arrive before the last order is sent. Correlate replies with
-their `strgOrdID` and process them until the orders are complete. The
-[strategy schema](../../strategy.capnp) defines requests, acknowledgements,
-executions, and failures.
+5. Send and receive application messages. Send one packed `ManagerMessage`
+   per binary WebSocket message. Keep receiving while sending a batch, and retain
+   responses that arrive before the last order is sent. Match replies to orders
+   using `strgOrdID` and process them until the orders are complete. The
+   [strategy schema](../../strategy.capnp) defines requests, acknowledgements,
+   executions, and failures.
 
-**6. Close.** Finish the WebSocket close handshake and release the connection.
+6. Close. Finish the WebSocket close handshake and release the connection.
 
-## Connection Example
+## Connection example
 
 Open an order connection using the running session's settings:
 
@@ -105,9 +105,11 @@ def connect_orders(host, port, token, timeout=30, tls=False):
     )
 ```
 
-## Recovery Announcement
+## Recovery announcement
 
-The first application message from the server is a WebSocket **text** message:
+The recovery announcement tells you how many requests the server has already
+stored and how many historical replies it will send. Read the first application
+message from the server as a WebSocket text message:
 
 ```json
 {"received": 0, "pending": 0}
@@ -118,13 +120,15 @@ example:
 
 | Field | Meaning |
 | --- | --- |
-| `received` | Records on the mapped request stream before the recovery snapshot boundary |
-| `pending` | Records on the mapped response stream remaining after the requested skip offset at that boundary |
+| `received` | Requests already persisted on the order route selected by your token |
+| `pending` | Historical replies still to send after the requested skip |
 
-The token selects the request and response streams covered by these counts.
-They are not limited to the current WebSocket connection. Titan's TCP and
-WebSocket order-entry routes share the request stream, so TCP submissions also
-contribute to `received`.
+The server captures a recovery boundary. `received` counts records on the
+request stream selected by your token before that boundary. `pending` counts
+records on the selected response stream after the skip and before that boundary.
+The counts include other producers writing to those same streams. Titan's
+TCP and WebSocket order-entry routes share the request stream, so TCP
+submissions also contribute to `received`.
 
 The optional `x-wssyncer-skipmessages` header supplies the number of historical
 responses to skip. A nonempty value must contain only decimal digits, have at
@@ -138,16 +142,17 @@ added afterward do not increase `pending`. Use `received` with a retained
 history of the request stream to decide which requests need retransmission.
 Neither count confirms execution of an order.
 
-Recovery and live replies cover the token's response stream. The separate
-OMS control/status channel is not included, so status messages sent only on
-that channel are absent from WebSocket replies. Titan's main-session broadcast
-status is available through TCP.
+Recovery and live replies come from the response stream selected by your token.
+The order management system (OMS) control/status channel is separate. Messages
+sent only on that channel are absent from WebSocket replies. Titan's main-session
+broadcast status is available through TCP.
 
-The bundled WebSocket sample validates the announcement and consumes the
-pending replies before submitting its new batch. It discards those historical
-replies and applies no timeout to the pending replay after the announcement.
+The WebSocket sample validates the announcement and reads all
+pending replies before submitting its new batch. See the
+[WebSocket strategy guide](../strategies/websocket.md#recovery-and-timeouts)
+for its handling of historical replies and timeouts.
 
-## Order Payloads and Responses
+## Order payloads and responses
 
 Use the bundled [strategy schema](../../strategy.capnp) and
 [common types](../../common.capnp) to construct and decode payloads. Send one
@@ -161,14 +166,14 @@ application message. Empty client binary messages are ignored; client text
 application messages are rejected.
 
 The 64-bit service accepts assembled binary payloads of up to
-**8,388,496 bytes**. This limit covers all fragments of a message. An oversized
+8,388,496 bytes. This limit covers all fragments of a message. An oversized
 message closes that connection with code 1009; partial fragments are not
 submitted as separate requests.
 
 Set `message.strg` to `new`, `cancel`, or `replace`, or use `new2`/`replace2`
 for text prices and quantities. Support depends on the OMS or execution service.
-The TCP guide's [order encoder](tcp-carnitas.md#sending-orders) constructs the same
-packed payload; send the returned bytes as a binary WebSocket message.
+The encoder in the [TCP API](tcp-carnitas.md#sending-orders) constructs the same
+packed payload. Send the returned bytes as a binary WebSocket message.
 
 Use a distinct `strgOrdID` for each new order you submit under the same client
 identity, across all connections. Retain it to match replies.
@@ -184,16 +189,18 @@ reason. Execution events arrive in `sess.exec` or `sess.exec2`; inspect their
 prices and quantities as text. Use `strgOrdID` to correlate replies;
 `ManagerMessage.seqnum` is a separate sequence for each output channel.
 
-The [bundled sample](../../ws-strategy.py) submits the same IOC limit-buy batch
-as the TCP sample. It retains replies during sends and finishes when every order receives
-`filled`, `canceled`, or `rejected`. A forwarding acknowledgement does not
-complete an order. A `message.sess.failed` response ends the sample with an error.
-The sample ignores `ctrl.failed`, which can leave it waiting until its
-order-response timeout.
+Continue receiving execution and rejection responses after a forwarding
+acknowledgement; the acknowledgement alone does not complete an order.
 
-## Ping/Pong and Close
+The WebSocket sample submits the same immediate-or-cancel
+(IOC) limit-buy batch as the TCP sample. It retains replies during sends and
+finishes when every order receives `filled`, `canceled`, or `rejected`. See the
+[WebSocket strategy guide](../strategies/websocket.md#completion-and-output)
+for failure handling and output.
 
-The server schedules a Ping every **five seconds**. Delivery may be delayed
+## Ping/Pong and close
+
+The server schedules a Ping every 5 seconds. Delivery may be delayed
 while the connection is not writable. Process control frames and answer Ping
 with Pong. Keep receiving during REST discovery and price polling;
 `websocket-client` handles Ping while its receive loop runs.

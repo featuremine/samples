@@ -18,22 +18,24 @@ The examples cover two ways to connect:
 
 ### Install dependencies
 
-* Python >=3.9
+- Python 3.9 or later
 
-For Debian-based systems use
+On Debian-based systems, install Git and Python:
+
 ```bash
 apt-get install -y git python3
 ```
 
-For Redhat-based systems use
+On Red Hat-based systems, install Git and Python:
+
 ```bash
 dnf install -y git python3
 ```
 
-### Set up virtual environment
+### Set up a virtual environment
 
-To set up a virtual environment you may run the following commands from the
-repository root, where both strategy scripts and `requirements.txt` are located.
+Run the following commands from the repository root, where both strategy
+scripts and `requirements.txt` are located.
 
 Create and activate a virtual environment on macOS or Linux:
 
@@ -68,34 +70,32 @@ defines the accounts, venues, securities, and price feed used by the samples.
 3. Check **Host** and the service ports in **Connections**.
 4. Start the session and keep it running while running a sample.
 
-When a custom **Host** is configured in the Titan profile, please provide the
-configured address with `--host` when running the strategy.
+For a custom **Host**, pass that address with `--host` when running the strategy.
 The profile tooltip shows the connection address and ports for each service.
 
-In **Accounts**, each client has its own identity, order-entry token, and one
-or more accounts. A client's token gives access to its accounts and order
-channels. New sessions publish the configured account name as
-`VenueAccountMapping.venueAccount`, the broker account field. The parent client
-determines ownership and routing. Start a new session after changing client
-identities or account definitions; existing recordings remain unchanged.
+Each client has its own token and one or more accounts. The token gives access
+to that client's accounts and order channels. Start a new session after
+changing client identities or account definitions; existing recordings remain
+unchanged. The [Reference REST API](docs/api/rest-reference.md) explains how
+account names and ownership appear in reference data.
 
 The token routes orders to the first configured venue. The samples select
 orders from all visible venue mappings, so use one execution venue.
 
 | Service | Default port | Sample |
 | --- | --- | --- |
-| TCP orders | `8032` | TCP |
-| TCP market data | `8033` | TCP |
-| WebSocket orders | `8034` | WebSocket |
-| REST prices | `8035` | WebSocket |
-| REST reference data | `8036` | WebSocket |
+| TCP orders | 8032 | TCP |
+| TCP market data | 8033 | TCP |
+| WebSocket orders | 8034 | WebSocket |
+| REST market data | 8035 | WebSocket |
+| REST reference data | 8036 | WebSocket |
 
 ## Run a strategy
 
-Both samples submit one batch of simulated IOC limit buy orders and wait for
-the results. Each order uses the current ask price and a quantity of up to one
-unit. The strategy guides describe how accounts, securities, and venues are
-selected.
+Both samples submit one batch of simulated immediate-or-cancel (IOC) limit buy
+orders and wait for the results. Each order uses the current ask price and a
+quantity of up to one unit. The strategy guides describe how accounts,
+securities, and venues are selected.
 
 With the virtual environment active and the Titan session running, choose a
 sample. Replace `<TOKEN>` with your complete order-entry token.
@@ -129,9 +129,9 @@ Order update: <EVENT>
 Done
 ```
 
-`Done` means every submitted order received a terminal fill, cancellation, or
-rejection. Both samples wait for eligible reference data and prices without an
-overall startup deadline. Press **Ctrl+C** to stop while waiting.
+`Done` means every submitted order has been filled, canceled, or rejected. Both
+samples wait for eligible reference data and prices without an overall startup
+deadline. Press **Ctrl+C** to stop while waiting.
 
 ## Documentation
 
@@ -145,8 +145,8 @@ The [old strategy guide](docs/strategies/tcp-old.md) covers
 limit orders.
 
 - [Reference REST API](docs/api/rest-reference.md): account, venue, security,
-  position, and limit discovery.
-- [Market-data REST API](docs/api/rest-market-data.md): price-query requests,
+  position, and limit data.
+- [Market data REST API](docs/api/rest-market-data.md): price queries,
   field/value responses, and endpoint errors.
 
 The bundled [strategy schema](strategy.capnp), [reference schema](reference.capnp),

@@ -3,12 +3,12 @@
 Use the reference API to retrieve the securities available at each venue,
 the accounts configured to trade there, and account positions and limits.
 
-See the [WebSocket integration guide](ws-gateway.md) for the connection workflow
+See the [WebSocket API guide](ws-gateway.md) for the connection workflow
 and the [WebSocket strategy guide](../strategies/websocket.md) to run the sample.
 
-## Endpoint and Authentication
+## Endpoint and authentication
 
-Send GET requests to Titan's reference port, **8036** by default. Put the
+Send GET requests to Titan's reference port, 8036 by default. Put the
 complete client order-entry token in the `Authorization` header:
 
 ```http
@@ -34,22 +34,35 @@ endpoint that provides TLS.
 ## Routes
 
 Successful responses have `Content-Type: application/json`. Each response is
-an array of [reference-schema](../../reference.capnp) messages, including their
+an array of [reference schema](../../reference.capnp) messages, including their
 wrappers. For an account entry, read `record["message"]["account"]`.
 
-| GET path | Schema member | Returned records and identity |
-| --- | --- | --- |
-| `/accounts` | `RiskData.message.account` | Accounts whose `client` matches the authenticated client; keyed by `identifier` |
-| `/venueAccountMappings` | `VenueData.message.venueAccountMapping` | Mappings for accessible accounts; keyed by account `identifier` and `venueID` |
-| `/venueSecurityAttributes` | `VenueData.message.venueSecurityAttribute` | Attributes for accessible venues; keyed by `venueID` and `securityId` |
-| `/securities` | `Symbology.message.securityDefinition` | Defined securities attributed to accessible venues; deduplicated by `identifier` |
-| `/venues` | `VenueData.message.venue` | Defined venues mapped to accessible accounts; keyed by `identifier` |
-| `/positions` | `RiskData.message.position` | Positions for accessible accounts; keyed by `accountId` and `securityId` |
-| `/limitMaster` | `RiskData.message.limitMaster` | All latest limit definitions after authentication; keyed by `limitId` |
-| `/riskLimits` | `RiskData.message.riskLimit` | Account-scoped limits for accessible accounts; keyed by account, `limitId`, and `symbolAggregation` |
-| `/markingLimits` | `RiskData.message.markingLimit` | Account-scoped limits for accessible accounts; keyed by account, `limitId`, and `symbolAggregation` |
+The token determines which accounts and related records you can retrieve.
+`/limitMaster` returns the latest definition of each limit after authentication.
 
-## Visibility and Updates
+| GET path | Records returned | Schema member |
+| --- | --- | --- |
+| `/accounts` | Accounts available to you | `RiskData.message.account` |
+| `/venueAccountMappings` | Account-to-venue mappings | `VenueData.message.venueAccountMapping` |
+| `/venueSecurityAttributes` | Venue-to-security attributes | `VenueData.message.venueSecurityAttribute` |
+| `/securities` | Security definitions | `Symbology.message.securityDefinition` |
+| `/venues` | Venue definitions | `VenueData.message.venue` |
+| `/positions` | Account positions | `RiskData.message.position` |
+| `/limitMaster` | Global limit definitions | `RiskData.message.limitMaster` |
+| `/riskLimits` | Account risk limits | `RiskData.message.riskLimit` |
+| `/markingLimits` | Account marking limits | `RiskData.message.markingLimit` |
+
+Each response contains at most one record per key. Use these keys to match
+updates:
+
+- Accounts, securities, and venues: `identifier`. Global limit definitions:
+  `limitId`.
+- Account-to-venue mappings: account `identifier` and `venueID`.
+  Venue-to-security attributes: `venueID` and `securityId`.
+- Positions: `accountId` and `securityId`.
+- Risk and marking limits: account ID, `limitId`, and `symbolAggregation`.
+
+## Visibility and updates
 
 Your account-to-venue mappings determine which venues you can see.
 Venue-to-security attributes determine which securities you can see. A venue
@@ -70,7 +83,7 @@ account scope and the account, venue, and security relationships.
 Use HEAD on the same paths to obtain the selected response's content length
 without receiving its body.
 
-## JSON Representation
+## JSON representation
 
 - Enums are returned as JSON numbers.
 - Inactive union members are omitted. A selected void member has the value
@@ -86,7 +99,7 @@ In Python, use `int(value)` for identifiers to accept both numeric forms.
 Access fields through their message wrappers, as shown in the account example
 above.
 
-## Status Codes and Limits
+## Status codes and limits
 
 | Status | Meaning |
 | ---: | --- |
@@ -99,4 +112,4 @@ above.
 The [WebSocket sample](../../ws-strategy.py) demonstrates discovery using
 `/securities`, `/accounts`, `/venueAccountMappings`, `/venueSecurityAttributes`,
 and `/positions`. Use the returned security identifiers to request quotes from
-the [market-data REST API](rest-market-data.md).
+the [Market data REST API](rest-market-data.md).

@@ -7,8 +7,11 @@ and sends orders through the WebSocket API.
 Follow the setup instructions in the [main README](../../README.md) before
 running the sample.
 
-The sample submits one batch of IOC limit buy orders. Each order uses the
-current ask price and a quantity of up to one unit.
+The sample submits one batch of immediate-or-cancel (IOC) limit buy orders.
+Each order uses the current ask price and a quantity of up to one unit.
+
+In Titan's **Accounts** section, copy the **Order-entry token** for the client
+whose accounts you want to use. Configure one execution venue for this sample.
 
 Run the sample from the repository root with your virtual environment active
 and the Titan session running:
@@ -17,18 +20,23 @@ and the Titan session running:
 python ws-strategy.py --token "<TOKEN>"
 ```
 
-The sample uses the same host for all three services. For different endpoint
-settings:
+The sample uses the same host for all three services. To use another host or
+ports, pass the corresponding options. For example, on macOS or Linux:
 
 ```sh
-python ws-strategy.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_PORT> --reference-port <REFERENCE_PORT> --token "<TOKEN>"
+python ws-strategy.py \
+  --host "<HOST>" \
+  --port <WS_PORT> \
+  --market-port <PRICES_PORT> \
+  --reference-port <REFERENCE_PORT> \
+  --token "<TOKEN>"
 ```
 
 | Service | Default port | Documentation |
 | --- | --- | --- |
-| WebSocket orders | `8034` | [WebSocket API](../api/ws-gateway.md) |
-| REST prices | `8035` | [Market-data API](../api/rest-market-data.md) |
-| REST reference data | `8036` | [Reference API](../api/rest-reference.md) |
+| WebSocket orders | 8034 | [WebSocket API](../api/ws-gateway.md) |
+| REST market data | 8035 | [Market data REST API](../api/rest-market-data.md) |
+| REST reference data | 8036 | [Reference REST API](../api/rest-reference.md) |
 
 The [strategy schema](../../strategy.capnp) defines order requests and responses.
 
@@ -37,16 +45,19 @@ The [strategy schema](../../strategy.capnp) defines order requests and responses
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `--host` | `localhost` | Host shared by all three service connections |
-| `--port` | `8034` | WebSocket order-entry port |
-| `--market-port` | `8035` | REST price port |
-| `--reference-port` | `8036` | REST reference-data port |
+| `--port` | 8034 | WebSocket order-entry port |
+| `--market-port` | 8035 | REST market-data port |
+| `--reference-port` | 8036 | REST reference-data port |
 | `--token` | Required | Client order-entry token |
 | `--schemas` | Script directory | Compatible Cap'n Proto schema directory |
-| `--timeout` | `30` seconds | Connection, HTTP, and order-response timeout |
+| `--timeout` | 30 seconds | Connection, HTTP, and order-response timeout |
 | `--tls` | Disabled | Use WSS and HTTPS for all three service connections |
 
-Titan's embedded endpoints use plain WS/HTTP. Add `--tls` when connecting
-through an endpoint providing WSS/HTTPS; it changes all three connections
+For Titan's default wildcard **Host**, the default `localhost` connects through
+loopback. For another **Host**, pass that configured address with `--host`.
+
+Titan's embedded endpoints use plain WS and HTTP. Add `--tls` when connecting
+through an endpoint providing WSS and HTTPS; it changes all three connections
 together.
 
 To list all command-line options:
@@ -68,19 +79,18 @@ python ws-strategy.py --token "<TOKEN>" --schemas "<SCHEMA_DIRECTORY>"
 ```
 
 A relative `--schemas` path is resolved from the terminal's working directory.
-The WebSocket protocol has no schema-version handshake, so the selected order
+There is no WebSocket schema-version handshake, so the selected order
 schema must be compatible with the running service.
 
 Before placing orders, the sample retrieves accounts, securities, venue-account
 mappings, venue-security attributes, and positions from the
-[reference REST API](../api/rest-reference.md). It requests ask field `25` and
-ask-quantity field `735` from the [market-data REST API](../api/rest-market-data.md)
+[Reference REST API](../api/rest-reference.md). It requests ask field `25` and
+ask-quantity field `735` from the [Market data REST API](../api/rest-market-data.md)
 using `POST /api/prices`.
 
-In Titan's **Accounts** section, copy the token for the client you want to use.
-It gives access to that client's accounts and order channels. Account display
-names do not determine ownership. Start a new session after changing client
-identities or account definitions.
+The token gives access to the selected client's accounts and order channels.
+Account names do not determine ownership. Start a new session after changing
+client identities or account definitions.
 
 The token routes orders to the first configured venue. Use one execution venue
 with this sample, since it selects orders from all visible venue mappings.
@@ -93,17 +103,16 @@ buy order for each eligible account, security, and venue combination, using:
 
 - Ask price field `25` as the limit price.
 - The smaller of ask quantity field `735` and one unit as the order quantity.
-- IOC time in force and the DMA algorithm.
+- IOC time in force and the direct market access (DMA) algorithm.
 
 Orders follow sorted security/venue pairs, then ascending account identifier
 within each pair. Positions do not affect order selection or sizing.
 
 ## Recovery and timeouts
 
-Each run receives the advertised `pending` historical replies before
-submitting its order batch. Historical replies do not complete the new batch.
-The sample continues to answer WebSocket Ping frames while retrieving
-reference data and prices.
+At startup, the sample receives and discards the advertised `pending`
+historical replies before submitting its order batch. It continues to answer
+WebSocket Ping frames while retrieving reference data and prices.
 
 HTTP 503 responses are retried while the services finish recovery. There is no
 overall deadline for waiting for eligible reference data and positive, finite
@@ -129,9 +138,9 @@ Order update: <EVENT>
 Done
 ```
 
-`Done` means every submitted order received a terminal fill, cancellation, or
-rejection. A `sess.failed` response stops the sample with an error. A forwarding
-failure can appear as an order-response timeout.
+`Done` means every submitted order has been filled, canceled, or rejected. The
+sample stops with an error on `sess.failed`. It ignores `ctrl.failed`, so a
+forwarding failure can leave it waiting until the order-response timeout.
 
 ## Troubleshooting
 
@@ -145,7 +154,7 @@ failure can appear as an order-response timeout.
 - If no orders are placed, check that the price service returns positive,
   finite ask prices and ask quantities for eligible securities.
 - For REST errors other than the retried 503 status, see the
-  [reference API](../api/rest-reference.md) or [market-data API](../api/rest-market-data.md).
+  [Reference REST API](../api/rest-reference.md) or [Market data REST API](../api/rest-market-data.md).
 - If the WebSocket closes, check the [API guide's close codes](../api/ws-gateway.md#pingpong-and-close).
   Only the newest connection accepted for a token remains active.
 - If order responses time out, check the running session for forwarding or

@@ -11,6 +11,9 @@ The sample submits one batch of DAY limit orders. It generates random target
 positions and uses the difference from current positions to determine each
 order's side and quantity, with a fixed limit price of 10.
 
+In Titan's **Accounts** section, copy the **Order-entry token** for the client
+whose accounts you want to use. Configure one execution venue for this sample.
+
 Install `requests` in your active virtual environment in addition to the
 shared [requirements](../../requirements.txt):
 
@@ -25,11 +28,16 @@ and the Titan session running:
 python ws-strategy-old.py --token "<TOKEN>"
 ```
 
-The sample uses the same host for all three services. For different endpoint
-settings:
+The sample uses the same host for all three services. To use another host or
+ports, pass the corresponding options. For example, on macOS or Linux:
 
 ```sh
-python ws-strategy-old.py --host "<HOST>" --port <WS_PORT> --market-port <PRICES_PORT> --reference-port <REFERENCE_PORT> --token "<TOKEN>"
+python ws-strategy-old.py \
+  --host "<HOST>" \
+  --port <WS_PORT> \
+  --market-port <PRICES_PORT> \
+  --reference-port <REFERENCE_PORT> \
+  --token "<TOKEN>"
 ```
 
 For connection, recovery, and message formats, see the
@@ -40,30 +48,30 @@ For connection, recovery, and message formats, see the
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `--host` | `localhost` | Host shared by all three services |
-| `--port` | `8034` | WebSocket order-entry port |
-| `--market-port` | `8035` | REST price port |
-| `--reference-port` | `8036` | REST reference-data port |
+| `--host` | `localhost` | Host shared by all three service connections |
+| `--port` | 8034 | WebSocket order-entry port |
+| `--market-port` | 8035 | REST market-data port |
+| `--reference-port` | 8036 | REST reference-data port |
 | `--token` | Required | Client order-entry token |
 | `--schemas` | Script directory | Compatible Cap'n Proto schema directory |
-| `--timeout` | `30` seconds | Does not change this sample's timeouts; see below |
-| `--tls` | Disabled | Use WSS and HTTPS for all three services |
+| `--timeout` | 30 seconds | Does not change this sample's timeouts; see below |
+| `--tls` | Disabled | Use WSS and HTTPS for all three service connections |
+
+For Titan's default wildcard **Host**, the default `localhost` connects through
+loopback. For another **Host**, pass that configured address with `--host`.
+
+Titan's embedded endpoints use plain WS and HTTP. Add `--tls` when connecting
+through an endpoint providing WSS and HTTPS; it changes all three connections
+together:
+
+```sh
+python ws-strategy-old.py --token "<TOKEN>" --tls
+```
 
 To list all command-line options:
 
 ```sh
 python ws-strategy-old.py --help
-```
-
-For Titan's default wildcard **Host**, the default `localhost` connects through
-loopback. For another **Host**, pass that configured address with `--host`.
-
-Titan's embedded endpoints use plain WS and HTTP. When connecting through an
-endpoint providing TLS, add `--tls` to select WSS for orders and HTTPS for both
-REST services:
-
-```sh
-python ws-strategy-old.py --token "<TOKEN>" --tls
 ```
 
 ## Schemas and reference data
@@ -79,27 +87,26 @@ python ws-strategy-old.py --token "<TOKEN>" --schemas "<SCHEMA_DIRECTORY>"
 ```
 
 A relative `--schemas` path is resolved from the terminal's working directory.
-There is no WebSocket schema-version handshake, so the selected schema must be
-compatible with the running service.
+There is no WebSocket schema-version handshake, so the selected order
+schema must be compatible with the running service.
 
 Before placing orders, the sample retrieves accounts, venues, securities,
 venue-security attributes, venue-account mappings, and positions from the
-[reference REST API](../api/rest-reference.md). It stops with an error if required
+[Reference REST API](../api/rest-reference.md). It stops with an error if required
 account, venue, security, or mapping data is empty.
 
 The initial price query sends **GET `/api/prices` with a request body**, using
 `Content-Type: text/plain; charset=us-ascii`. It requests bid field `22` and ask
 field `25` for securities in the venue-security attributes. The current
-[market-data API guide](../api/rest-market-data.md) documents POST for price queries;
+[Market data REST API](../api/rest-market-data.md) documents POST for price queries;
 check that the server accepts the old script's GET-with-body form.
 
 The returned prices do not determine which orders are placed, their limit
 prices, or their quantities.
 
-In Titan's **Accounts** section, copy the token for the client you want to use.
-It gives access to that client's accounts and order channels. Account display
-names do not determine ownership. Start a new session after changing client
-identities or account definitions.
+The token gives access to the selected client's accounts and order channels.
+Account names do not determine ownership. Start a new session after changing
+client identities or account definitions.
 
 The token routes orders to the first configured venue. Use one execution venue
 with this sample, since it selects orders from all visible venue mappings.
@@ -117,8 +124,8 @@ with this sample, since it selects orders from all visible venue mappings.
    then rounds `target - current` to obtain the order quantity. Zero quantities
    are skipped.
 5. It sends a buy for a positive quantity or a sell for a negative quantity,
-   using the absolute quantity, limit price `10`, DAY time in force, the DMA
-   algorithm, and no maximum floor.
+   using the absolute quantity, limit price `10`, DAY time in force, the direct
+   market access (DMA) algorithm, and no maximum floor.
 
 If every calculated quantity is zero, no orders are sent.
 
