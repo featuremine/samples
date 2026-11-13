@@ -1,8 +1,8 @@
 # Getting started
 
-This repository contains Python samples you can run with Featuremine's local
-development environment or hosted services. Start with Titan to use real
-Kraken market data and simulated execution on your computer.
+This repository contains sample strategies you can run with Featuremine's local
+development environment (Titan) or our hosted services. Start with Titan and use real
+Kraken market data and simulated trading venue on your computer.
 
 Request Titan access through the
 [local trading development environment page](https://www.featuremine.com/learn#titan).
@@ -37,12 +37,14 @@ connected.
 
 ## Strategies
 
-In the previous section, you placed orders using the asynchronous WebSocket
-strategy. The other available strategies demonstrate different programming
-models and API combinations.
+The *ws-strategy.py* strategy uses our REST based API for reference and market data and websocket based API for
+for order entry. These APIs are best for rapid prototyping and quickly deploying your strategies to market.
+We also have low latency APIs that suit a stategy that require higher performance. You can refer to *tcp-strategy.py*
+for the example of their usage.
 
-Each file documents its behavior and command-line options; use `--help` to
-view the available options.
+The following table lists examples, how to run them and underlying technologies used. Each file documents individual strategy's behavior and command-line options; use `--help` to view them.
+
+
 
 | Strategy | Orders | Reference data | Market data | Command |
 | --- | --- | --- | --- | --- |
@@ -50,12 +52,9 @@ view the available options.
 | [Synchronous WebSocket](ws-strategy-sync.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy-sync.py --token "<TOKEN>"` |
 | [TCP](tcp-strategy.py) | [TCP](docs/api/tcp-orders.md) | [TCP](docs/api/tcp-orders.md#reference-data) | [TCP](docs/api/tcp-market-data.md) | `python tcp-strategy.py --token "<TOKEN>"` |
 
-The samples use Cap'n Proto schemas for [orders](strategy.capnp) and
-[reference data](reference.capnp), with [shared types](common.capnp).
+## Services
 
-## APIs
-
-The strategies use the following order gateways and data feeds. Each guide
+The strategies use the following services. Each guide
 describes the requests and responses, with examples.
 
 | Service | Default port | Purpose |
@@ -65,3 +64,6 @@ describes the requests and responses, with examples.
 | [REST market data feed](docs/api/rest-market-data.md) | 8035 | Query the latest requested price fields |
 | [TCP order gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
 | [TCP market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |
+
+We use Cap'n Proto schemas for [orders](strategy.capnp) and
+[reference data](reference.capnp). Each service guide documents their usage with example.
