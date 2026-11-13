@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import math
 from pathlib import Path
+import random
 import struct
 import sys
 import time
@@ -22,11 +23,13 @@ ELEKTRON = 108
 
 
 def frame(kind, payload, sequence, timestamp, stream=0):
+    """Encode a Carnitas frame; the checksum covers the header only."""
     header = HEADER.pack(0, kind, len(payload), sequence, timestamp, stream)
     return bytes([(-sum(header)) & 255]) + header[1:] + payload
 
 
 async def read_frame(reader):
+    """Read one complete frame regardless of TCP read boundaries."""
     header = await reader.readexactly(HEADER.size)
     if sum(header) & 255:
         raise RuntimeError("Invalid Carnitas header checksum")
@@ -34,7 +37,33 @@ async def read_frame(reader):
     return kind, sequence, stream, await reader.readexactly(size)
 
 
+def usable_quotes(fields):
+    """Return executable sides with a finite price and at most one unit."""
+    quotes = []
+    for side, price_field, quantity_field in (("buy", 25, 735), ("sell", 22, 730)):
+        price = fields.get(price_field)
+        quantity = fields.get(quantity_field, 0)
+        if (isinstance(price, (int, float)) and math.isfinite(price) and price > 0
+                and isinstance(quantity, (int, float)) and math.isfinite(quantity) and quantity > 0):
+            quotes.append((side, price, min(quantity, 1.0)))
+    return quotes
+
+
 async def main(args):
+    """Recover reference/prices, send one IOC batch, then await terminal replies.
+
+    Each mapped account/security/venue combination gets one random usable side.
+    Positions are retrieved as a reference-data example, not used for sizing.
+    Forwarding acknowledgements do not complete orders in this sample.
+
+    Both connections request full history and match the complete schema version.
+    Catch-up/data readiness has no overall timeout; connection and post-send
+    response waits use --timeout. Empty heartbeat frames are sent every ten
+    seconds. ctrl.failed is ignored; sess.failed stops the sample with an error.
+    New runs create fresh IDs without managing orders from previous runs.
+    See strategy.capnp for orders and reference.capnp for reference messages.
+    Use one execution venue: Titan routes this token to its first venue.
+    """
     version = capnp.load(str(args.schemas / "schemas_version.capnp"))
     expected = (version.schemasVersionMajor, version.schemasVersionMinor, version.schemasVersionPatch)
     strategy = capnp.load(str(args.schemas / "strategy.capnp"))
@@ -49,6 +78,7 @@ async def main(args):
             connection = {"reader": reader, "writer": writer, "task": None,
                           "sequence": 0, "received": 0, "catchup": 0}
             connections.append(connection)
+            # Recovery offset zero requests all history on this token's route.
             writer.write(HANDSHAKE.pack(MAGIC, *expected, 264) + token + struct.pack("<Q", 0))
             await writer.drain()
             hello = await asyncio.wait_for(reader.readexactly(32), args.timeout)
@@ -139,31 +169,29 @@ async def main(args):
                 if not pending:
                     print("Done", flush=True)
                     return
+            # Announcement frames do not count toward advertised catch-up totals.
             if orders_sent or any(connection["received"] < connection["catchup"]
                                   for connection in connections):
                 continue
             combinations = []
             for security, venue in sorted(attributes):
-                fields = prices.get(channels.get(security), {})
-                ask = fields.get(25)
-                quantity = fields.get(735, 0)
-                if security not in securities or not isinstance(ask, (int, float)) or not math.isfinite(ask) or ask <= 0:
-                    continue
-                if not isinstance(quantity, (int, float)) or not math.isfinite(quantity) or quantity <= 0:
+                quotes = usable_quotes(prices.get(channels.get(security), {}))
+                if security not in securities or not quotes:
                     continue
                 for account in sorted(accounts):
                     if (account, venue) in mappings:
-                        combinations.append((account, security, venue, ask, min(quantity, 1.0)))
+                        side, price, quantity = random.choice(quotes)
+                        combinations.append((account, security, venue, side, price, quantity))
             if not combinations:
                 continue
-            for account, security, venue, price, quantity in combinations:
+            for account, security, venue, side, price, quantity in combinations:
                 order_id = time.time_ns()
                 while order_id in pending:
                     order_id += 1
                 message = strategy.ManagerMessage.new_message()
                 message.from_dict({"message": {"strg": {"new": {
                     "strgOrdID": order_id, "accountID": account, "securityId": security,
-                    "venueID": venue, "orderSide": "buy", "orderType": {"limit": price},
+                    "venueID": venue, "orderSide": side, "orderType": {"limit": price},
                     "quantity": quantity, "maxFloor": {"none": None},
                     "timeInForce": "ioc", "algorithm": {"dma": None},
                 }}}})

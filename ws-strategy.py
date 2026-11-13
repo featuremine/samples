@@ -6,6 +6,7 @@ import asyncio
 import json
 import math
 from pathlib import Path
+import random
 import sys
 import time
 import urllib.error
@@ -16,6 +17,7 @@ import websocket
 
 
 def request(args, port, path, data=None):
+    """Fetch one REST resource, returning None while its snapshot is loading."""
     scheme = "https" if args.tls else "http"
     headers = {"Authorization": args.token}
     if data is not None:
@@ -32,6 +34,7 @@ def request(args, port, path, data=None):
 
 
 def reference_data(args):
+    """Load token-visible accounts and the mappings needed to place orders."""
     records = {}
     for path in ("securities", "accounts", "venueAccountMappings",
                  "venueSecurityAttributes", "positions"):
@@ -58,7 +61,8 @@ def reference_data(args):
 
 
 def price_data(args, securities):
-    body = "25 735\n" + " ".join(str(identifier) for identifier in sorted(securities)) + "\n"
+    """Read bid/ask prices and quantities as alternating field/value pairs."""
+    body = "22 25 730 735\n" + " ".join(str(identifier) for identifier in sorted(securities)) + "\n"
     response = request(args, args.market_port, "/api/prices", body.encode("ascii"))
     if response is None:
         return None
@@ -80,6 +84,7 @@ def price_data(args, securities):
 
 
 def receive(connection):
+    """Receive an application message while processing Ping/Pong frames."""
     while True:
         opcode, payload = connection.recv_data(control_frame=True)
         if opcode in (websocket.ABNF.OPCODE_PING, websocket.ABNF.OPCODE_PONG):
@@ -90,6 +95,7 @@ def receive(connection):
 
 
 def recover(connection):
+    """Consume the announced historical replies before placing a new batch."""
     opcode, payload = receive(connection)
     if opcode != websocket.ABNF.OPCODE_TEXT:
         raise RuntimeError("Missing WebSocket recovery information")
@@ -104,7 +110,32 @@ def recover(connection):
             raise RuntimeError("Invalid WebSocket recovery message")
 
 
+def usable_quotes(fields):
+    """Return executable sides with a finite price and at most one unit."""
+    quotes = []
+    for side, price_field, quantity_field in (("buy", 25, 735), ("sell", 22, 730)):
+        price = fields.get(price_field)
+        quantity = fields.get(quantity_field, 0)
+        if (isinstance(price, (int, float)) and math.isfinite(price) and price > 0
+                and isinstance(quantity, (int, float)) and math.isfinite(quantity) and quantity > 0):
+            quotes.append((side, price, min(quantity, 1.0)))
+    return quotes
+
+
 async def main(args):
+    """Recover replies, discover reference/prices and submit one IOC batch.
+
+    Each mapped account/security/venue combination gets one random usable side.
+    Positions demonstrate reference-data retrieval rather than order sizing.
+    Continue through forwarding acknowledgements until every order is terminal.
+
+    Historical replies are discarded, not used to reconstruct outstanding orders.
+    There is no overall recovery/data-readiness deadline; --timeout bounds REST
+    calls, connection setup and the post-send response wait. ctrl.failed is
+    ignored; sess.failed stops the sample. New runs create fresh order IDs.
+    See strategy.capnp for packed order and response messages. Use one execution
+    venue: Titan routes this token to its first venue.
+    """
     strategy = capnp.load(str(args.schemas / "strategy.capnp"))
     if len(args.token) != 256 or not args.token.isascii():
         raise ValueError("Titan requires a 256-byte ASCII token")
@@ -116,6 +147,7 @@ async def main(args):
     orders_sent = False
 
     async def read_responses():
+        """Queue live replies concurrently, including replies during batch sends."""
         try:
             while True:
                 opcode, payload = await asyncio.to_thread(receive, connection)
@@ -150,29 +182,26 @@ async def main(args):
                 continue
             combinations = []
             for security, venue in sorted(attributes):
-                fields = prices.get(security, {})
-                ask = fields.get(25)
-                quantity = fields.get(735, 0)
-                if security not in securities or not isinstance(ask, (int, float)) or not math.isfinite(ask) or ask <= 0:
-                    continue
-                if not isinstance(quantity, (int, float)) or not math.isfinite(quantity) or quantity <= 0:
+                quotes = usable_quotes(prices.get(security, {}))
+                if security not in securities or not quotes:
                     continue
                 for account in sorted(accounts):
                     if (account, venue) in mappings:
-                        combinations.append((account, security, venue, ask, min(quantity, 1.0)))
+                        side, price, quantity = random.choice(quotes)
+                        combinations.append((account, security, venue, side, price, quantity))
             if not combinations:
                 continue
             if not responses.empty():
                 raise responses.get_nowait()
             messages = []
-            for account, security, venue, price, quantity in combinations:
+            for account, security, venue, side, price, quantity in combinations:
                 order_id = time.time_ns()
                 while order_id in pending:
                     order_id += 1
                 message = strategy.ManagerMessage.new_message()
                 message.from_dict({"message": {"strg": {"new": {
                     "strgOrdID": order_id, "accountID": account, "securityId": security,
-                    "venueID": venue, "orderSide": "buy", "orderType": {"limit": price},
+                    "venueID": venue, "orderSide": side, "orderType": {"limit": price},
                     "quantity": quantity, "maxFloor": {"none": None},
                     "timeInForce": "ioc", "algorithm": {"dma": None},
                 }}}})

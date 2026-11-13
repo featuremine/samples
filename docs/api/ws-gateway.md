@@ -1,26 +1,22 @@
-# WebSocket API — Integration guide
+# WebSocket gateway
 
-Use the WebSocket API to submit orders and receive responses. Retrieve reference
-data and prices through the REST APIs. Order messages use the same Cap'n Proto
-schema as the TCP API.
+Use the WebSocket gateway to submit orders and receive responses. Retrieve
+reference data through the [REST reference data feed](rest-reference.md) and
+prices through the [REST market data feed](rest-market-data.md). Order messages
+use the same Cap'n Proto schema as the [TCP order gateway](tcp-orders.md).
 
-For setup and run commands, see the [repository README](../../README.md) and
-[WebSocket strategy guide](../strategies/websocket.md).
+For a local run, see [Getting started](../../README.md). The documented
+[asynchronous](../../ws-strategy.py) and
+[synchronous](../../ws-strategy-sync.py) examples use this gateway.
 
-## Services and authentication
+## Connection and authentication
 
-Start a Titan session and use its connect address and service ports with your
-**Order-entry token**. The profile's **Connections** settings configure
-these services:
-
-| Service | Default port | Purpose |
-| --- | ---: | --- |
-| WebSocket orders | 8034 | Packed `strategy/ManagerMessage` requests and replies |
-| REST market data | 8035 | Price field/value queries through the [Market data REST API](rest-market-data.md) |
-| REST reference data | 8036 | Account, venue, and security discovery through the [Reference REST API](rest-reference.md) |
+Connect to the running session's WebSocket port, 8034 by default, using its
+connect address and your **Order-entry token**. The profile tooltip provides
+the address and ports.
 
 Titan's embedded endpoints use plain WS/HTTP. Use WSS/HTTPS when connecting
-through a TLS endpoint. In the bundled sample, `--tls` switches all three
+through a TLS endpoint. In the WebSocket examples, `--tls` switches all three
 services to WSS/HTTPS.
 
 Pass the complete token as the `Authorization` header value for the WebSocket
@@ -69,14 +65,15 @@ framing; application messages contain no Carnitas TCP envelope.
 
 3. Discover reference data. Request accounts, security definitions,
    account/venue mappings, venue/security attributes, and positions from the
-   [Reference REST API](rest-reference.md). Use these records to find accounts
-   and securities configured for the venue on your order route.
+   [REST reference data feed](rest-reference.md). Use these records to find
+   accounts and securities configured for the venue on your order route.
 
-4. Obtain prices. Request ask price field identifier (FID) `25` and ask quantity
-   FID `735` for those numeric security identifiers from the
-   [Market data REST API](rest-market-data.md). Retry HTTP 503 while the price
-   service loads its initial data. Check that prices and quantities are finite
-   and positive before using them in an order.
+4. Obtain prices. Request bid price FID 22, ask price FID 25, bid quantity FID
+   730, and ask quantity FID 735 from the
+   [REST market data feed](rest-market-data.md). A FID identifies a price field,
+   distinct from the security identifier. Retry HTTP 503 while initial data
+   loads. Use a finite, positive price and quantity for the chosen side: ask for
+   a buy, bid for a sell.
 
 5. Send and receive application messages. Send one packed `ManagerMessage`
    per binary WebSocket message. Keep receiving while sending a batch, and retain
@@ -147,12 +144,13 @@ The order management system (OMS) control/status channel is separate. Messages
 sent only on that channel are absent from WebSocket replies. Titan's main-session
 broadcast status is available through TCP.
 
-The WebSocket sample validates the announcement and reads all
-pending replies before submitting its new batch. See the
-[WebSocket strategy guide](../strategies/websocket.md#recovery-and-timeouts)
-for its handling of historical replies and timeouts.
+The [asynchronous example](../../ws-strategy.py) validates the announcement and
+discards all pending replies before submitting its new batch. Its code
+documents replay and timeout handling. The
+[synchronous example](../../ws-strategy-sync.py) instead uses historical fills
+when recovering positions.
 
-## Order payloads and responses
+## Requests
 
 Use the bundled [strategy schema](../../strategy.capnp) and
 [common types](../../common.capnp) to construct and decode payloads. Send one
@@ -172,13 +170,15 @@ submitted as separate requests.
 
 Set `message.strg` to `new`, `cancel`, or `replace`, or use `new2`/`replace2`
 for text prices and quantities. Support depends on the OMS or execution service.
-The encoder in the [TCP API](tcp-carnitas.md#sending-orders) constructs the same
-packed payload. Send the returned bytes as a binary WebSocket message.
+The encoder in the [TCP order gateway guide](tcp-orders.md#example) constructs
+the same packed payload. Send the returned bytes as a binary WebSocket message.
 
 Use a distinct `strgOrdID` for each new order you submit under the same client
 identity, across all connections. Retain it to match replies.
 Cancel and replace requests use the existing order's identifier; see
-[cancel and replace](tcp-carnitas.md#cancel-and-replace) for the shared request fields.
+[cancel and replace](tcp-orders.md#cancel-and-replace) for the shared request fields.
+
+## Responses
 
 Decode replies with `strategy.ManagerMessage.from_bytes_packed(payload)` and
 inspect the `message` union. A `ctrl.placeForwarded`, `cancelForwarded`, or
@@ -192,11 +192,12 @@ prices and quantities as text. Use `strgOrdID` to correlate replies;
 Continue receiving execution and rejection responses after a forwarding
 acknowledgement; the acknowledgement alone does not complete an order.
 
-The WebSocket sample submits the same immediate-or-cancel
-(IOC) limit-buy batch as the TCP sample. It retains replies during sends and
-finishes when every order receives `filled`, `canceled`, or `rejected`. See the
-[WebSocket strategy guide](../strategies/websocket.md#completion-and-output)
-for failure handling and output.
+The asynchronous example randomly chooses usable buy or sell sides and sends
+immediate-or-cancel (IOC), direct market access (DMA) orders of at most one
+unit. It retains replies during sends and finishes when every order receives
+`filled`, `canceled`, or `rejected`. Its code documents application failure
+handling. The synchronous example finishes on forwarding acknowledgements or
+forwarding failures instead; execution responses can arrive after it exits.
 
 ## Ping/Pong and close
 

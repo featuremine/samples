@@ -13,13 +13,10 @@ $C.fieldgetset;
 const clientProtocolVersion :Int64 = 1;
 const serverProtocolVersion :Int64 = 1;
 
-############ Broker information ##########
-# NOTE: Venue Message
-# need an optional exdest configuration
-# possibly multiple brokers for each 
+# Venue definitions and mappings.
 struct Venue
 {
-    identifier            @0: UInt16;    # Broker ID
+    identifier            @0: UInt16;    # Venue identifier
     code                  @1: Text;      # Broker code
     exdest                @2: Text;      # Exdest
     swapIndicator         @3: Bool;      # Swap indicator
@@ -27,13 +24,12 @@ struct Venue
 }
 
 
-# NOTE: Venue Message
-# This needs to be produced for each venue and each security
+# Attributes for a security at a venue.
 struct VenueSecurityAttribute
 {
     venueID       @0: UInt16;
-    securityId    @1: UInt64;    # Arcesium SPN
-    scalingFactor @2: Float64;   # Q: Is it the same as the multiplier in SecurityDefinition?
+    securityId    @1: UInt64;    # Security identifier
+    scalingFactor @2: Float64;
     symbol        @3: Text;
     symbolSfx     @4: Text;
     cfiCode       @5: Text;
@@ -42,18 +38,15 @@ struct VenueSecurityAttribute
     securityExch  @8: Text;
 }
 
-############ Account, account mappings, and account attributes ##############
-# NOTE: Risk Message
+# Accounts and their venue mappings.
 struct Account
 {
     identifier      @0: UInt64; # Account ID
     aggUnit         @1: UInt32; # For aggregation at the account level
-    managerAggUnit  @2: UInt32; # For aggregation at the Portofolio Manager level
-    # TODO: add currency identifier for the account
-    client          @3: Text; # Client name for this account (can be empty by default)
+    managerAggUnit  @2: UInt32; # Manager aggregation unit
+    client          @3: Text; # Client identity that owns this account
 }
 
-# NOTE: Venue Message
 struct VenueAccountMapping
 {
     struct CustomField {
@@ -61,15 +54,12 @@ struct VenueAccountMapping
       value @1 :Text;
     }
     identifier     @0: UInt64;  # Account ID
-    # NOTE should be a Broker Identifier to account for multiple identifiers for the same broker session (exdest)
-    venueID        @1: UInt16;  # Broker identifier - max 8 characters
+    venueID        @1: UInt16;  # Venue identifier
     venueAccount   @2: Text;    # Broker account - max 48 characters
     placeTags      @3: List(CustomField);
     cancelTags     @4: List(CustomField);
 }
 
-# NOTE: Venue Message
-# FIX locate needs to be text not ID
 struct LocatePool
 {
     identifier     @0: UInt64;  # Account ID
@@ -84,10 +74,7 @@ struct Locates
     locateProvider @3: Text;
 }
 
-# NOTE VenueSecurityLocate message to be defined
-# for futures will hard code NoLocateRequired
-
-############ Security Definitions ##############
+# Security definitions.
 enum InstrumentType
 {
     equity @0;
@@ -117,11 +104,11 @@ struct FutureExpiration
 
 struct FutureSpreadLeg
 {
-    identifier    @0: UInt64;    # Arcesium SPN
+    identifier    @0: UInt64;    # Security identifier
     ratio         @1: Float64;   # Ratio of this leg in a spread
 }
 
-# NOTE: in symbvology channel
+# Published on the symbology channel.
 struct SecurityDefinition
 {
     struct CurrencyPair
@@ -144,7 +131,7 @@ struct SecurityDefinition
         }
 
         multiplier    @0: Float64;
-        #product refers to the exchange root symbol
+        # Exchange root symbol.
         product       @1: Text;
         expiration    @2: FutureExpiration;
         futureType : union $Go.name("Kind") {
@@ -162,7 +149,7 @@ struct SecurityDefinition
         quantityCurrency @0: UInt64;    # currency identifier for the destination currency
     }
 
-    identifier        @0: UInt64;            # Arcesium SPN
+    identifier        @0: UInt64;            # Security identifier
     symbol            @1: Text;              # Maximum 32 characters
     ric               @2: Text;              # Reuters identifier code - Max 16 characters
     bloombergId       @3: Text;              # Bloomberg ID - Max 16 characters
@@ -234,7 +221,7 @@ struct Currency
     currency      @1: Text; # e.g. EURO, USD, JPY, AUD, etc.
 }
 
-######### Risk Information #######
+# Risk information.
 enum RiskType
 {
     postTrade            @0;
@@ -290,10 +277,10 @@ struct MarkingLimit
     }
 }
 
-#NOTE: position channel
+# Published on the position channel.
 struct Position
 {
-    securityId               @0: UInt64;    # Arcesium SPN
+    securityId               @0: UInt64;    # Security identifier
     accountId                @1: UInt64;    # Account identifier
     quantity                 @2: Int64;     # Account position
     closePrice               @3: Float64;   # Security close price
@@ -301,7 +288,7 @@ struct Position
 
 struct Position2
 {
-    securityId               @0: UInt64;    # Arcesium SPN
+    securityId               @0: UInt64;    # Security identifier
     accountId                @1: UInt64;    # Account identifier
     quantity                 @2: Text;      # Account position
     closePrice               @3: Text;      # Security close price

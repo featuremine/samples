@@ -1,44 +1,35 @@
-# Reference REST API
+# REST reference data feed
 
-Use the reference API to retrieve the securities available at each venue,
-the accounts configured to trade there, and account positions and limits.
+Use the REST reference data feed to retrieve the securities available at each
+venue, the accounts configured to trade there, and account positions and
+limits. For a local run, see [Getting started](../../README.md). The
+[WebSocket gateway](ws-gateway.md) guide explains the order workflow.
 
-See the [WebSocket API guide](ws-gateway.md) for the connection workflow
-and the [WebSocket strategy guide](../strategies/websocket.md) to run the sample.
+## Connection and authentication
 
-## Endpoint and authentication
+Send requests to the running session's reference port, 8036 by default. Put
+the complete order-entry token in the `Authorization` header, without a
+`Bearer ` prefix. A missing or unknown token returns HTTP 400.
 
-Send GET requests to Titan's reference port, 8036 by default. Put the
-complete client order-entry token in the `Authorization` header:
+Titan's embedded listener uses HTTP. Use HTTPS when an external endpoint
+provides TLS.
 
-```http
-GET /accounts HTTP/1.1
-Host: <HOST>:<REFERENCE_PORT>
-Authorization: <TOKEN>
-```
+Each client in Titan's **Accounts** section has its own name, token, and
+accounts. The token identifies that client and gives access only to its
+accounts. `Account.client` contains the owning client's name. New sessions
+publish the configured account name as `VenueAccountMapping.venueAccount`,
+the broker account field. Use identifiers from the running session rather
+than assuming values from a different profile or recording.
 
-Send the token without a `Bearer ` prefix. A missing or unknown token returns
-HTTP 400.
+Start a new session after changing client identities or account definitions;
+existing recordings keep their original definitions. See
+[local environment configuration](../../README.md#running-and-configuring-a-local-testing-environment).
 
-Each client in Titan's **Accounts** section has its own name, order-entry token,
-and accounts. The token identifies that client and exposes only its accounts.
-An account's `Account.client` is its owning client's name. New sessions publish
-the configured account name as `VenueAccountMapping.venueAccount`, the broker
-account field. Use the identifiers returned by reference discovery in the
-running session. Start a new session after changing client identities or
-account definitions; existing recordings remain unchanged.
+## Requests
 
-Use HTTP for Titan's embedded listener. Use HTTPS when connecting through an
-endpoint that provides TLS.
-
-## Routes
-
-Successful responses have `Content-Type: application/json`. Each response is
-an array of [reference schema](../../reference.capnp) messages, including their
-wrappers. For an account entry, read `record["message"]["account"]`.
-
-The token determines which accounts and related records you can retrieve.
-`/limitMaster` returns the latest definition of each limit after authentication.
+Send GET requests to these routes. The token selects the accounts and related
+records you can retrieve. `/limitMaster` returns the latest definition of each
+limit after authentication.
 
 | GET path | Records returned | Schema member |
 | --- | --- | --- |
@@ -52,8 +43,17 @@ The token determines which accounts and related records you can retrieve.
 | `/riskLimits` | Account risk limits | `RiskData.message.riskLimit` |
 | `/markingLimits` | Account marking limits | `RiskData.message.markingLimit` |
 
-Each response contains at most one record per key. Use these keys to match
-updates:
+Use HEAD on the same paths to obtain the selected response's content length
+without receiving its body.
+
+## Responses
+
+Successful responses have `Content-Type: application/json`. Each is an array
+of [reference schema](../../reference.capnp) messages, including their wrappers.
+For an account, read `record["message"]["account"]`.
+
+Each response contains at most one record per key. Use these keys when
+matching updates:
 
 - Accounts, securities, and venues: `identifier`. Global limit definitions:
   `limitId`.
@@ -62,54 +62,72 @@ updates:
 - Positions: `accountId` and `securityId`.
 - Risk and marking limits: account ID, `limitId`, and `symbolAggregation`.
 
-## Visibility and updates
+### JSON representation
 
-Your account-to-venue mappings determine which venues you can see.
-Venue-to-security attributes determine which securities you can see. A venue
-or security is omitted from its definition endpoint until its definition is
-available. A valid token with no assigned accounts receives empty scoped
-arrays, but can still read `/limitMaster`.
-
-Repeat a GET request to refresh your data. An update replaces the previous
-record with the same key. Account reassignments can change the records visible
-to your token. Risk and marking limits remain separate for different symbol
-aggregations. Use record identifiers rather than relying on array order.
-
-During startup, a successful response can contain only part of the initial
-reference data. Check for the definitions you need and repeat the
-request until they are available. If records remain missing, check the token's
-account scope and the account, venue, and security relationships.
-
-Use HEAD on the same paths to obtain the selected response's content length
-without receiving its body.
-
-## JSON representation
-
-- Enums are returned as JSON numbers.
-- Inactive union members are omitted. A selected void member has the value
-  `null`.
+- Enums are JSON numbers.
+- Inactive union members are omitted. A selected void member is `null`.
 - Unset text, struct, and list fields are omitted. An explicitly set empty
   text value is `""`.
 - Nonfinite floating-point values are `null`.
-- A 64-bit integer is returned as a JSON number when JavaScript's shortest
-  decimal form of that number matches the original integer's decimal text.
-  Otherwise, it is returned as a decimal string.
+- A 64-bit integer is a JSON number when JavaScript's shortest decimal form
+  of that number matches the original integer's decimal text. Otherwise, it
+  is a decimal string.
 
-In Python, use `int(value)` for identifiers to accept both numeric forms.
-Access fields through their message wrappers, as shown in the account example
-above.
+Use `int(value)` for identifiers in Python to accept both numeric forms.
+Access fields through their message wrappers.
 
-## Status codes and limits
+## Example
 
-| Status | Meaning |
+Retrieve accounts and convert their identifiers to Python integers:
+
+```python
+import json
+import urllib.request
+
+
+def read_accounts(host, port, token, timeout=30, tls=False):
+    scheme = "https" if tls else "http"
+    request = urllib.request.Request(
+        f"{scheme}://{host}:{port}/accounts",
+        headers={"Authorization": token},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        records = json.load(response)
+    return [int(record["message"]["account"]["identifier"])
+            for record in records]
+```
+
+Use returned security identifiers to query the
+[REST market data feed](rest-market-data.md). The documented
+[asynchronous](../../ws-strategy.py) and
+[synchronous](../../ws-strategy-sync.py) examples combine reference discovery
+with price queries and orders.
+
+## Recovery and updates
+
+Account-to-venue mappings determine which venues you can retrieve.
+Venue-to-security attributes determine which securities you can retrieve.
+A venue or security is omitted from its definition route until its definition
+is available. A valid token with no assigned accounts receives empty scoped
+arrays but can still read `/limitMaster`.
+
+Repeat a GET request to refresh the data. An update replaces the record with
+the same key. Account reassignments can change the records visible to a token.
+Risk and marking limits remain separate for different symbol aggregations.
+Use identifiers rather than relying on array order.
+
+During startup, a successful response can contain only part of the initial
+data. Repeat requests until the definitions you need are available. If records
+remain missing, check the token's account scope, account-to-venue mappings,
+venue-to-security attributes, and definitions.
+
+## Errors and limits
+
+| HTTP status | Meaning |
 | ---: | --- |
 | 200 | Reference array returned, possibly empty |
-| 400 | Missing or unknown token; check the `Authorization` header |
+| 400 | Missing or unknown token; check `Authorization` |
 | 404 | Unsupported path or method; use GET or HEAD on a route above |
 | 413 | Selected JSON response exceeds 32 MiB |
 | 500 | Response could not be assembled |
-
-The [WebSocket sample](../../ws-strategy.py) demonstrates discovery using
-`/securities`, `/accounts`, `/venueAccountMappings`, `/venueSecurityAttributes`,
-and `/positions`. Use the returned security identifiers to request quotes from
-the [Market data REST API](rest-market-data.md).

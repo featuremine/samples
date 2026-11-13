@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Synchronous WebSocket/REST example targeting random account positions."""
 
 import json
 from itertools import groupby
@@ -9,7 +10,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import requests
 import websocket as ws
 import capnp # type: ignore[import-untyped]
-from os.path import dirname, realpath, join
 import math
 import argparse
 from pathlib import Path
@@ -28,8 +28,13 @@ if __name__ == "__main__":
     parser.add_argument("--tls", action="store_true", help="Use WSS and HTTPS through a TLS endpoint")
     args = parser.parse_args()
 
+    # This synchronous example keeps its original timing: REST calls have no
+    # timeout or retries, WebSocket calls use ten seconds, and --timeout is not
+    # applied. strategy.capnp defines the packed order and response messages.
+    # Use one execution venue: Titan routes this token to its first venue.
     spec: Any = capnp.load(str(args.schemas / 'strategy.capnp'))
 
+    # Retrieve token-visible accounts and venue/security mappings synchronously.
     scheme = "https" if args.tls else "http"
     response: requests.Response = requests.get(
         f"{scheme}://{args.host}:{args.reference_port}/accounts", headers={"authorization": args.token}
@@ -101,6 +106,8 @@ if __name__ == "__main__":
     supported: List[Tuple[int, int, int]] = []
     found: Set[int] = set()
 
+    # This example sends GET with a body; returned quotes gate eligibility,
+    # while order prices remain fixed at 10 rather than using bid/ask values.
     response = requests.get(
         f"{scheme}://{args.host}:{args.market_port}/api/prices",
         headers={"Content-Type": "text/plain; charset=us-ascii"},
@@ -133,8 +140,8 @@ if __name__ == "__main__":
             prices.add(int(secid))
 
     for security, securityVenues in venueSecurityAttributes.items():
-        # if not security in prices:
-        #     continue
+        if security not in prices:
+            continue
         venue: int = random.choice(securityVenues)
         venueAccounts: List[int] = venueAccountMappings.get(venue, [])
         if not venueAccounts:
@@ -146,8 +153,11 @@ if __name__ == "__main__":
     if not supported:
         raise RuntimeError("Unable to find valid combinations for order placement. Please reach out to FM team.")
 
+    # Use one to 1,000 random combinations, bounded by the available mappings.
     chosen: List[Tuple[int, int, int]] = random.sample(supported, random.randint(1, min(1000, len(supported))))
 
+    # Targets range from -999 to 1001 inclusive. A target may already equal the
+    # recovered position, producing no order; sizing rounds target minus current.
     desired: Dict[Tuple[int, int], Tuple[int, int]] = {
         (account, security): ((1 + random.randint(-1000, 1000)), venue)
         for account, venue, security in chosen
@@ -165,6 +175,8 @@ if __name__ == "__main__":
         recovery: Dict[str, Any] = json.loads(wsc.recv())
         print(f"Recovering {recovery['pending']} messages")
 
+        # Signed historical exec fills supplement the REST position snapshot.
+        # This example does not include exec2 fills in position recovery.
         for _ in range(recovery["pending"]):
             msg: Any = spec.ManagerMessage.from_bytes_packed(wsc.recv())
             accountPosition: Any = None
@@ -217,7 +229,8 @@ if __name__ == "__main__":
                                 "securityId": security,
                                 "venueID": venue,
                                 "orderSide": "buy" if quantity > 0 else "sell",
-                                "orderType": {"limit": 10}, # TODO: Get price from prices for limit, test more order types
+                                # This example deliberately uses a fixed DAY limit.
+                                "orderType": {"limit": 10},
                                 "quantity": abs(quantity),
                                 "maxFloor": {"none": None},
                                 "timeInForce": "day",
@@ -249,6 +262,8 @@ if __name__ == "__main__":
                 f"Placing {'buy' if quantity > 0 else 'sell'} {abs(quantity)} pos {current} target {target} for security {security}" + symbology
             )
 
+        # Done means ctrl.placeForwarded or ctrl.failed (before forwarding).
+        # Execution replies do not determine completion; DAY orders may remain.
         while len(responses["pending"]) > 0:
             msg = spec.ManagerMessage.from_bytes_packed(wsc.recv())
             msgtype = msg.message.which()

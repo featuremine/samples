@@ -1,167 +1,114 @@
-# Titan samples
+# Getting started
 
-Welcome to the introductory samples for portfolio managers. These examples
-show how to connect your strategy to order management services, retrieve
-reference data and prices, and submit orders.
+This repository contains Python samples you can run with Featuremine's local,
+development, and hosted trading environments. Start with Titan to use real
+Kraken market data and simulated execution on your computer.
 
-By accessing or using this software, you agree to be bound by the terms of the
-[End User License Agreement](EULA) included in this repository.
+Request Titan access through the
+[local trading development environment page](https://www.featuremine.com/learn#titan).
 
-The examples cover two ways to connect:
+## Run a strategy
 
-- [TCP strategy](tcp-strategy.py): uses the TCP API for reference data, prices,
-  and orders.
-- [WebSocket strategy](ws-strategy.py): uses the WebSocket API for orders and
-  the REST APIs for reference data and prices.
-
-## Requirements
-
-### Install dependencies
-
-- Python 3.9 or later
-
-On Debian-based systems, install Python:
-
-```bash
-apt-get install -y python3 python3-venv
-```
-
-On Red Hat-based systems, install Python:
-
-```bash
-dnf install -y python3
-```
-
-### Set up a virtual environment
-
-Run the following commands from the repository root, where both strategy
-scripts and `requirements.txt` are located.
-
-Create and activate a virtual environment on macOS or Linux:
-
-```sh
-python3 -m venv fm-venv
-source fm-venv/bin/activate
-```
-
-On Windows, using PowerShell:
-
-```powershell
-py -3 -m venv fm-venv
-fm-venv\Scripts\Activate.ps1
-```
-
-Install the shared requirements:
+Install [Python 3.9 or later](https://www.python.org/downloads/); we recommend
+using a [virtual environment](https://docs.python.org/3/library/venv.html).
+From the repository root, install the requirements:
 
 ```sh
 python -m pip install -r requirements.txt
 ```
 
-## Start Titan
+1. Install and open Titan. In **Sessions**, enter a new name in
+   **Search or name a session** and click **Create**.
+2. Click **Add profile** and enter a **Profile name**.
+3. In **Venues**, select **Kraken** from **Venue** and click **+**. Use
+   **Search pairs** to select `XBT/USD` and `XBT/EUR`. Keep this as the only venue.
+4. In **Accounts**, keep the default client and account. Click **Copy token**
+   beside **Order-entry token**; you will pass this token to the strategy.
+5. Keep the default **Host** and ports in **Connections**. Click **Create** in
+   the profile header to save the profile and start the session.
+6. On the same computer, run the WebSocket sample from the repository root.
+   Replace `<TOKEN>` with the complete token you copied:
 
-Titan provides the local test environment used in this guide. It runs the
-TCP, WebSocket, and REST services and simulates order execution. Your profile
-defines the accounts, venues, securities, and price feed used by the samples.
+   ```sh
+   python ws-strategy.py --token "<TOKEN>"
+   ```
 
-### Create a new session
+7. Inspect the orders and execution updates in Titan. The script prints `Done`
+   when it finishes. Keep the Titan session running while the strategy is
+   connected.
 
-Open Titan. In **Sessions**, enter a new name in **Search or name a session**,
-then click **Create** to begin setting up a new session. Next, create or
-choose a profile.
+## Running and configuring a local testing environment
 
-### Select and configure a profile
+A profile stores your venues, securities, accounts, and connection settings.
+A session runs the services with those settings and records its data. Profile
+changes apply to new sessions; an existing session keeps its original settings.
 
-Use one of your existing profiles or click **Add profile** and enter a **Profile name** to create a new one.
-Use the following setup for these samples:
+### Venues and securities
 
-- In **Venues**, add **Kraken** if it is not already configured: select it
-  from the **Venue** list and click **+**. Use **Search pairs** to find and
-  select the pairs you would like to test, such as `XBT/USD` and `XBT/EUR`.
-  Use one venue for these samples.
-- In **Accounts**, configure the accounts you want to use under the existing
-  client. You can rename the client or its accounts if desired. Then click
-  **Copy token** next to **Order-entry token**. Use this token to connect your
-  strategy to Titan.
-- In **Connections**, keep the default **Host** and ports when running the
-  strategy on the same computer as Titan. If you change them, use those
-  settings when running the strategy.
+Use one Kraken venue with these samples. In **Venues**, use **Search pairs**
+to choose the securities you want to test.
 
-### Start the session and connect a strategy
+### Accounts and tokens
 
-Click **Create** in the profile header to save the profile and start the
-session. Then follow the steps in the [Run a strategy](#run-a-strategy)
-section using the token you copied. Keep the Titan session running while your
-strategy is connected.
+A new profile includes one client and one account. In **Accounts**, set the
+account name and numeric ID, or use **Add account** to add accounts under the
+same client. Account IDs must be unique across the profile; account names must
+be unique within their client.
 
-For a custom **Host**, pass that address with `--host`. The profile tooltip
-shows the connection address and ports for each service. The default ports are:
+Each client has its own order-entry token, which gives access to its accounts
+and order channels. Use **Copy token** beside **Order-entry token** to copy it.
+After the session starts, you can also copy tokens from the profile-details
+popup. Start a new session after changing clients, tokens, or account definitions.
 
-| Service | Default port | Sample |
-| --- | --- | --- |
-| TCP orders | 8032 | TCP |
-| TCP market data | 8033 | TCP |
-| WebSocket orders | 8034 | WebSocket |
-| REST market data | 8035 | WebSocket |
-| REST reference data | 8036 | WebSocket |
+### Connections
 
-## Run a strategy
+**Connections** sets one listening **Host** and five service ports. The default
+host listens on all IPv4 interfaces; the samples use `localhost` to connect on
+the same computer. If you configure a specific **Host**, pass that address
+with `--host` when running a strategy.
 
-Both samples submit one batch of simulated immediate-or-cancel (IOC) limit buy
-orders and wait for the results. Each order uses the current ask price and a
-quantity of up to one unit. The strategy guides describe how accounts,
-securities, and venues are selected.
+| Service | Default port | Purpose |
+| --- | ---: | --- |
+| [TCP order gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
+| [TCP market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |
+| [WebSocket gateway](docs/api/ws-gateway.md) | 8034 | Submit orders and receive responses |
+| [REST market data feed](docs/api/rest-market-data.md) | 8035 | Query the latest requested price fields |
+| [REST reference data feed](docs/api/rest-reference.md) | 8036 | Retrieve accounts, securities, venues, positions, and limits |
 
-With the virtual environment active and the Titan session running, choose a
-sample. Replace `<TOKEN>` with your complete order-entry token.
+The running profile's tooltip shows the connection address and ports. Both
+TCP connections, the WebSocket gateway, and the REST reference data feed use
+the client's order-entry token. The REST market data feed requires no token.
 
-### TCP
+Titan's embedded listeners use plain TCP, WS, and HTTP. Leave `--tls` off for
+the local setup.
 
-```sh
-python tcp-strategy.py --token "<TOKEN>"
-```
+## Strategies
 
-See the [TCP strategy guide](docs/strategies/tcp.md) for connection settings,
-order selection, timeouts, and troubleshooting.
+With a Titan session running, choose a sample below. Run its command from the
+repository root, replacing `<TOKEN>` with the client's complete order-entry
+token. Each file documents how the strategy works.
 
-### WebSocket
+| Strategy | Orders | Reference data | Market data | Command |
+| --- | --- | --- | --- | --- |
+| [Asynchronous WebSocket](ws-strategy.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy.py --token "<TOKEN>"` |
+| [Synchronous WebSocket](ws-strategy-sync.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy-sync.py --token "<TOKEN>"` |
+| [TCP](tcp-strategy.py) | [TCP](docs/api/tcp-orders.md) | [TCP](docs/api/tcp-orders.md#reference-data) | [TCP](docs/api/tcp-market-data.md) | `python tcp-strategy.py --token "<TOKEN>"` |
 
-```sh
-python ws-strategy.py --token "<TOKEN>"
-```
+The samples use Cap'n Proto schemas for [orders](strategy.capnp) and
+[reference data](reference.capnp), with [shared types](common.capnp).
 
-See the [WebSocket strategy guide](docs/strategies/websocket.md) for connection
-settings, order selection, timeouts, TLS, and troubleshooting.
+### Connection options
 
-### Expected output
+Use each script's `--help` for its complete options. If you changed the local
+configuration, pass the matching host and ports:
 
-Once reference data and valid prices are available, the sample prints:
-
-```text
-Placed <COUNT> orders using live prices
-Order update: <EVENT>
-...
-Done
-```
-
-`Done` means every submitted order has been filled, canceled, or rejected. Both
-samples wait for eligible reference data and prices without an overall startup
-deadline. Press **Ctrl+C** to stop while waiting.
-
-## Documentation
-
-| Interface | Strategy guide | API guide |
-| --- | --- | --- |
-| Carnitas TCP | [TCP strategy](docs/strategies/tcp.md) | [TCP API](docs/api/tcp-carnitas.md) |
-| WebSocket orders | [WebSocket strategy](docs/strategies/websocket.md) | [WebSocket API](docs/api/ws-gateway.md) |
-
-The [old strategy guide](docs/strategies/tcp-old.md) covers
-[ws-strategy-old.py](ws-strategy-old.py), its random target positions, and DAY
-limit orders.
-
-- [Reference REST API](docs/api/rest-reference.md): account, venue, security,
-  position, and limit data.
-- [Market data REST API](docs/api/rest-market-data.md): price queries,
-  field/value responses, and endpoint errors.
-
-The bundled [strategy schema](strategy.capnp), [reference schema](reference.capnp),
-and [schema version](schemas_version.capnp) define the messages used by the samples.
+| Option | Purpose |
+| --- | --- |
+| `--host` | Host for every connection; defaults to `localhost` |
+| `--port` | Order port: 8034 for WebSocket, 8032 for TCP |
+| `--market-port` | Market-data port: 8035 for REST, 8033 for TCP |
+| `--reference-port` | REST reference-data port, 8036; WebSocket examples only |
+| `--token` | Required order-entry token |
+| `--schemas` | Compatible schema directory; defaults to the script's directory |
+| `--timeout` | Connection and response timeout; the synchronous example ignores this option |
+| `--tls` | WSS and HTTPS through a TLS endpoint; WebSocket examples only |

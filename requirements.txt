@@ -1,3 +1,4 @@
 msgpack==1.0.3
 pycapnp==2.0.0
+requests>=2.31,<3
 websocket-client==1.8.0
