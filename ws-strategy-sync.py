@@ -28,13 +28,11 @@ if __name__ == "__main__":
     parser.add_argument("--tls", action="store_true", help="Use WSS and HTTPS through a TLS endpoint")
     args = parser.parse_args()
 
-    # This synchronous example keeps its original timing: REST calls have no
-    # timeout or retries, WebSocket calls use ten seconds, and --timeout is not
-    # applied. strategy.capnp defines the packed order and response messages.
-    # Use one execution venue: Titan routes this token to its first venue.
+    # strategy.capnp defines the packed order and response messages.
     spec: Any = capnp.load(str(args.schemas / 'strategy.capnp'))
 
     # Retrieve token-visible accounts and venue/security mappings synchronously.
+    # These REST calls have no timeout or retries; --timeout is not applied.
     scheme = "https" if args.tls else "http"
     response: requests.Response = requests.get(
         f"{scheme}://{args.host}:{args.reference_port}/accounts", headers={"authorization": args.token}
@@ -139,6 +137,8 @@ if __name__ == "__main__":
         if valid:
             prices.add(int(secid))
 
+    # Choose one venue and account for each security with an available quote.
+    # Use one execution venue: Titan routes this token to its first venue.
     for security, securityVenues in venueSecurityAttributes.items():
         if security not in prices:
             continue
@@ -164,6 +164,7 @@ if __name__ == "__main__":
     }
     filled: Dict[Tuple[int, int], float] = {}
 
+    # WebSocket calls use the fixed ten-second timeout rather than --timeout.
     scheme = "wss" if args.tls else "ws"
     wsc: ws.WebSocket = ws.create_connection(
         url=f"{scheme}://{args.host}:{args.port}",
@@ -172,6 +173,7 @@ if __name__ == "__main__":
     )
 
     try:
+        # Read the recovery announcement before decoding its pending history.
         recovery: Dict[str, Any] = json.loads(wsc.recv())
         print(f"Recovering {recovery['pending']} messages")
 
@@ -210,6 +212,7 @@ if __name__ == "__main__":
             "placeForwarded": set(),
         }
 
+        # Combine the REST position snapshot with replayed fills before sizing.
         for key, val in desired.items():
             account, security = key
             target, venue = val
@@ -243,6 +246,7 @@ if __name__ == "__main__":
             orders.append((msg.to_bytes_packed(), quantity, current, target, security))
             responses["pending"].add(strgordid)
 
+        # Send the prepared orders as binary WebSocket messages.
         for order, quantity, current, target, security in orders:
             wsc.send(order, opcode=ws.ABNF.OPCODE_BINARY)
             secdef: Dict[str, Any] = securityDefinitions[security]

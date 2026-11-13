@@ -268,12 +268,12 @@ async def tcp_check(args, fixture, schema, tracker):
             kind, _, stream, payload = state["task"].result()
             state["task"] = None
             channel = (index, stream)
-            if kind == 0:
+            if kind == tcp.STREAM_ANNOUNCEMENT:
                 if payload:
                     streams[channel] = payload.decode().split(":", 1)[1]
                 continue
             state["received"] += 1
-            if kind == 100:
+            if kind == tcp.MANAGER_MESSAGE:
                 tracker.observe(payload, channel, historical=not sent)
             elif kind == tcp.SYMBOLOGY:
                 value = reference_schema.Symbology.from_bytes_packed(payload).message
@@ -306,7 +306,7 @@ async def tcp_check(args, fixture, schema, tracker):
                     for payload in make_orders(schema, choices, args.orders, random.Random(args.seed), tracker):
                         connections[0]["sequence"] += 1
                         connections[0]["writer"].write(tcp.frame(
-                            100, payload, connections[0]["sequence"], time.time_ns()))
+                            tcp.MANAGER_MESSAGE, payload, connections[0]["sequence"], time.time_ns()))
                     await connections[0]["writer"].drain()
                     sent = True
     finally:

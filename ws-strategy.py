@@ -25,6 +25,7 @@ def request(args, port, path, data=None):
     message = urllib.request.Request(
         f"{scheme}://{args.host}:{port}{path}", data=data, headers=headers)
     try:
+        # Pass --timeout to each REST request; discovery can repeat requests.
         with urllib.request.urlopen(message, timeout=args.timeout) as response:
             return response.read()
     except urllib.error.HTTPError as error:
@@ -103,6 +104,8 @@ def recover(connection):
     for field in ("received", "pending"):
         if type(snapshot.get(field)) is not int or snapshot[field] < 0:
             raise RuntimeError("Invalid WebSocket recovery information")
+    # Read all pending history without an overall replay deadline. Discard it;
+    # this example does not reconstruct outstanding orders from previous runs.
     connection.settimeout(None)
     for _ in range(snapshot["pending"]):
         opcode, _ = receive(connection)
@@ -113,6 +116,7 @@ def recover(connection):
 def usable_quotes(fields):
     """Return executable sides with a finite price and at most one unit."""
     quotes = []
+    # Buys use ask price/quantity (25/735); sells use bid price/quantity (22/730).
     for side, price_field, quantity_field in (("buy", 25, 735), ("sell", 22, 730)):
         price = fields.get(price_field)
         quantity = fields.get(quantity_field, 0)
@@ -123,19 +127,8 @@ def usable_quotes(fields):
 
 
 async def main(args):
-    """Recover replies, discover reference/prices and submit one IOC batch.
-
-    Each mapped account/security/venue combination gets one random usable side.
-    Positions demonstrate reference-data retrieval rather than order sizing.
-    Continue through forwarding acknowledgements until every order is terminal.
-
-    Historical replies are discarded, not used to reconstruct outstanding orders.
-    There is no overall recovery/data-readiness deadline; --timeout bounds REST
-    calls, connection setup and the post-send response wait. ctrl.failed is
-    ignored; sess.failed stops the sample. New runs create fresh order IDs.
-    See strategy.capnp for packed order and response messages. Use one execution
-    venue: Titan routes this token to its first venue.
-    """
+    """Recover history, submit one IOC batch, and wait for terminal replies."""
+    # strategy.capnp defines the packed order requests and replies.
     strategy = capnp.load(str(args.schemas / "strategy.capnp"))
     if len(args.token) != 256 or not args.token.isascii():
         raise ValueError("Titan requires a 256-byte ASCII token")
@@ -160,6 +153,7 @@ async def main(args):
 
     try:
         scheme = "wss" if args.tls else "ws"
+        # Apply --timeout to connection setup before reading the recovery history.
         connection = await asyncio.to_thread(
             websocket.create_connection, f"{scheme}://{args.host}:{args.port}",
             header={"Authorization": args.token}, timeout=args.timeout,
@@ -167,12 +161,14 @@ async def main(args):
         await asyncio.to_thread(recover, connection)
         reader = asyncio.create_task(read_responses())
         pending = set()
+        # Retry reference and price discovery without an overall readiness deadline.
         while not orders_sent:
             if not responses.empty():
                 raise responses.get_nowait()
             reference = await asyncio.to_thread(reference_data, args)
             if reference is None:
                 continue
+            # Positions demonstrate reference retrieval; they do not size orders here.
             securities, accounts, mappings, attributes, positions = reference
             identifiers = {security for security, venue in attributes if security in securities}
             if not identifiers or not accounts:
@@ -180,6 +176,8 @@ async def main(args):
             prices = await asyncio.to_thread(price_data, args, identifiers)
             if prices is None:
                 continue
+            # Choose one random usable side per mapped account/security/venue.
+            # Use one execution venue: Titan routes this token to its first venue.
             combinations = []
             for security, venue in sorted(attributes):
                 quotes = usable_quotes(prices.get(security, {}))
@@ -193,8 +191,10 @@ async def main(args):
                 continue
             if not responses.empty():
                 raise responses.get_nowait()
+            # Prepare packed IOC/DMA limit orders before sending the batch.
             messages = []
             for account, security, venue, side, price, quantity in combinations:
+                # Use fresh IDs for this run and avoid duplicates within the batch.
                 order_id = time.time_ns()
                 while order_id in pending:
                     order_id += 1
@@ -212,6 +212,7 @@ async def main(args):
             orders_sent = True
             for payload in messages:
                 await asyncio.to_thread(connection.send, payload, websocket.ABNF.OPCODE_BINARY)
+            # --timeout bounds the terminal-response wait after the batch is sent.
             deadline = time.monotonic() + args.timeout
             print(f"Placed {len(pending)} orders using live prices", flush=True)
         while pending:
@@ -225,6 +226,7 @@ async def main(args):
             if isinstance(payload, Exception):
                 raise payload
             message = strategy.ManagerMessage.from_bytes_packed(payload)
+            # Ignore forwarding/control messages, including ctrl.failed.
             if message.message.which() != "sess":
                 continue
             session = message.message.sess
@@ -232,12 +234,15 @@ async def main(args):
                 execution = getattr(session, session.which())
                 event = execution.data.which()
                 print(f"Order update: {event}", flush=True)
+                # Only terminal execution events complete an order.
                 if event in ("filled", "canceled", "rejected"):
                     pending.discard(execution.strgOrdID)
             elif session.which() == "failed":
+                # A session failure stops the whole run.
                 raise RuntimeError("Fill model rejected an order request")
         print("Done", flush=True)
     finally:
+        # Unblock a pending receive before canceling its asynchronous reader.
         if connection is not None:
             connection.abort()
         if reader is not None:
