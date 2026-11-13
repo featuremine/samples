@@ -58,7 +58,7 @@ describes the requests and responses, with examples.
 
 | Service | Default port | Purpose |
 | --- | ---: | --- |
-| [WebSocket gateway](docs/api/ws-gateway.md) | 8034 | Submit orders and receive responses |
+| [WebSocket order gateway](docs/api/ws-gateway.md) | 8034 | Submit orders and receive responses |
 | [REST reference data feed](docs/api/rest-reference.md) | 8036 | Retrieve accounts, securities, venues, positions, and limits |
 | [REST market data feed](docs/api/rest-market-data.md) | 8035 | Query the latest requested price fields |
 | [TCP order gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
