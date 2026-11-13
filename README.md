@@ -17,33 +17,36 @@ From the repository root, install the requirements:
 python -m pip install -r requirements.txt
 ```
 
-1. Install and open Titan. In **Sessions**, enter a new name in
-   **Search or name a session** and click **Create**.
-2. Click **Add profile** and enter a **Profile name**.
-3. In **Venues**, select **Kraken** from **Venue** and click **+**. Use
-   **Search pairs** to select `XBT/USD` and `XBT/EUR`. Keep this as the only venue.
-4. In **Accounts**, keep the default client and account. Click **Copy token**
-   beside **Order-entry token**; you will pass this token to the strategy.
-5. Keep the default **Host** and ports in **Connections**. Click **Create** in
-   the profile header to save the profile and start the session.
-6. On the same computer, run the WebSocket sample from the repository root.
+1. Install and open Titan. In **Sessions**, select **Default** and click
+   **Start**.
+2. Hover the profile name in the running workspace. In its details popup,
+   click **Copy order-entry token** for the default client.
+3. On the same computer, run the WebSocket sample from the repository root.
    Replace `<TOKEN>` with the complete token you copied:
 
    ```sh
    python ws-strategy.py --token "<TOKEN>"
    ```
 
-7. Inspect the orders and execution updates in Titan. The script prints `Done`
+4. Inspect the orders and execution updates in Titan. The script prints `Done`
    when it finishes. Keep the Titan session running while the strategy is
    connected.
 
 ## Running and configuring a local testing environment
+
+Titan provides a **Default** profile and a **Default** session that uses it.
+The supplied setup has one client, one account, and one Kraken venue with
+simulated execution. Titan restores either default entry at startup if it is
+missing and preserves existing profiles and sessions.
 
 A profile stores your venues, securities, accounts, and connection settings.
 A session runs the services with those settings and records its data. Profile
 changes apply to new sessions; an existing session keeps its original settings.
 
 ### Venues and securities
+
+The supplied **Default** profile includes `XBT/USD`, `XBT/EUR`, `ETH/USD`, and
+`ETH/EUR`.
 
 Use one Kraken venue with these samples. In **Venues**, use **Search pairs**
 to choose the securities you want to test.
