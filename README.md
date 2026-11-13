@@ -37,8 +37,10 @@ connected.
 
 ## Strategies
 
-The quickstart uses the asynchronous WebSocket sample. You can also try the
-synchronous WebSocket or TCP sample with the same Titan session and token.
+In the previous section, you placed orders using the asynchronous WebSocket
+strategy. The other available strategies demonstrate different programming
+models and API combinations.
+
 Each file documents its behavior and command-line options; use `--help` to
 view the available options.
 
