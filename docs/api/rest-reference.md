@@ -22,8 +22,8 @@ the broker account field. Use identifiers from the running session rather
 than assuming values from a different profile or recording.
 
 Start a new session after changing client identities or account definitions;
-existing recordings keep their original definitions. See
-[local environment configuration](../../README.md#running-and-configuring-a-local-testing-environment).
+existing recordings keep their original definitions. For a local run, see
+[Getting started](../../README.md#run-a-strategy).
 
 ## Requests
 

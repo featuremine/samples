@@ -35,64 +35,12 @@ Inspect the orders and execution updates in Titan. The script prints `Done`
 when it finishes. Keep the Titan session running while the strategy is
 connected.
 
-## Running and configuring a local testing environment
-
-Titan provides a **Default** profile and a **Default** session that uses it.
-The supplied setup has one client, one account, and one Kraken venue with
-simulated execution. Titan restores either default entry at startup if it is
-missing and preserves existing profiles and sessions.
-
-A profile stores your venues, securities, accounts, and connection settings.
-A session runs the services with those settings and records its data. Profile
-changes apply to new sessions; an existing session keeps its original settings.
-
-### Venues and securities
-
-The supplied **Default** profile includes `XBT/USD`, `XBT/EUR`, `ETH/USD`, and
-`ETH/EUR`.
-
-Use one Kraken venue with these samples. In **Venues**, use **Search pairs**
-to choose the securities you want to test.
-
-### Accounts and tokens
-
-A new profile includes one client and one account. In **Accounts**, set the
-account name and numeric ID, or use **Add account** to add accounts under the
-same client. Account IDs must be unique across the profile; account names must
-be unique within their client.
-
-Each client has its own order-entry token, which gives access to its accounts
-and order channels. Use **Copy token** beside **Order-entry token** to copy it.
-After the session starts, you can also copy tokens from the profile-details
-popup. Start a new session after changing clients, tokens, or account definitions.
-
-### Connections
-
-**Connections** sets one listening **Host** and five service ports. The default
-host listens on all IPv4 interfaces; the samples use `localhost` to connect on
-the same computer. If you configure a specific **Host**, pass that address
-with `--host` when running a strategy.
-
-| Service | Default port | Purpose |
-| --- | ---: | --- |
-| [TCP order gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
-| [TCP market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |
-| [WebSocket gateway](docs/api/ws-gateway.md) | 8034 | Submit orders and receive responses |
-| [REST market data feed](docs/api/rest-market-data.md) | 8035 | Query the latest requested price fields |
-| [REST reference data feed](docs/api/rest-reference.md) | 8036 | Retrieve accounts, securities, venues, positions, and limits |
-
-The running profile's tooltip shows the connection address and ports. Both
-TCP connections, the WebSocket gateway, and the REST reference data feed use
-the client's order-entry token. The REST market data feed requires no token.
-
-Titan's embedded listeners use plain TCP, WS, and HTTP. Leave `--tls` off for
-the local setup.
-
 ## Strategies
 
-With a Titan session running, choose a sample below. Run its command from the
-repository root, replacing `<TOKEN>` with the client's complete order-entry
-token. Each file documents how the strategy works.
+The quickstart uses the asynchronous WebSocket sample. You can also try the
+synchronous WebSocket or TCP sample with the same Titan session and token.
+Each file documents its behavior and command-line options; use `--help` to
+view the available options.
 
 | Strategy | Orders | Reference data | Market data | Command |
 | --- | --- | --- | --- | --- |
@@ -103,18 +51,15 @@ token. Each file documents how the strategy works.
 The samples use Cap'n Proto schemas for [orders](strategy.capnp) and
 [reference data](reference.capnp), with [shared types](common.capnp).
 
-### Connection options
+## APIs
 
-Use each script's `--help` for its complete options. If you changed the local
-configuration, pass the matching host and ports:
+The strategies use the following order gateways and data feeds. Each guide
+describes the requests and responses, with examples.
 
-| Option | Purpose |
-| --- | --- |
-| `--host` | Host for every connection; defaults to `localhost` |
-| `--port` | Order port: 8034 for WebSocket, 8032 for TCP |
-| `--market-port` | Market-data port: 8035 for REST, 8033 for TCP |
-| `--reference-port` | REST reference-data port, 8036; WebSocket examples only |
-| `--token` | Required order-entry token |
-| `--schemas` | Compatible schema directory; defaults to the script's directory |
-| `--timeout` | Connection and response timeout; the synchronous example ignores this option |
-| `--tls` | WSS and HTTPS through a TLS endpoint; WebSocket examples only |
+| Service | Default port | Purpose |
+| --- | ---: | --- |
+| [WebSocket gateway](docs/api/ws-gateway.md) | 8034 | Submit orders and receive responses |
+| [REST reference data feed](docs/api/rest-reference.md) | 8036 | Retrieve accounts, securities, venues, positions, and limits |
+| [REST market data feed](docs/api/rest-market-data.md) | 8035 | Query the latest requested price fields |
+| [TCP order gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
+| [TCP market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |
