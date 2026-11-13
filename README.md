@@ -17,20 +17,23 @@ From the repository root, install the requirements:
 python -m pip install -r requirements.txt
 ```
 
-1. Install and open Titan. In **Sessions**, select **Default** and click
-   **Start**.
-2. Hover the profile name in the running workspace. In its details popup,
-   click **Copy order-entry token** for the default client.
-3. On the same computer, run the WebSocket sample from the repository root.
-   Replace `<TOKEN>` with the complete token you copied:
+Install and open Titan. In **Sessions**, select the **Default** session and
+click **Start**.
 
-   ```sh
-   python ws-strategy.py --token "<TOKEN>"
-   ```
+Hover the **Default** profile name in the running workspace to view its
+connection details. In the popup, click **Copy order-entry token** for the
+default client.
 
-4. Inspect the orders and execution updates in Titan. The script prints `Done`
-   when it finishes. Keep the Titan session running while the strategy is
-   connected.
+Run the WebSocket sample from the repository root. Replace `<TOKEN>` with the
+complete token you copied:
+
+```sh
+python ws-strategy.py --token "<TOKEN>"
+```
+
+Inspect the orders and execution updates in Titan. The script prints `Done`
+when it finishes. Keep the Titan session running while the strategy is
+connected.
 
 ## Running and configuring a local testing environment
 
