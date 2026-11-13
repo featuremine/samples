@@ -162,7 +162,7 @@ class TcpStrategyTests(unittest.TestCase):
             fields = {22: 99, 730: 4, 25: 100, 735: 0.4}
             payload = b"".join(msgpack.packb(value) for pair in fields.items() for value in pair)
             market_reader.feed_data(hello + struct.pack("<QQ", 0, 1)
-                + tcp.frame(0, b"fixture:quotes/test", 0, 0, 1) + tcp.frame(tcp.ELEKTRON, payload, 1, 0, 1))
+                + tcp.frame(0, b"fixture:quotes/test", 0, 0, 1) + tcp.frame(tcp.FMTRON, payload, 1, 0, 1))
             choices = iter((0, 1))
             with patch.object(tcp.asyncio, "open_connection", side_effect=[
                     (orders_reader, orders_writer), (market_reader, market_writer)]), \

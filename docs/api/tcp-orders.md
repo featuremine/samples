@@ -129,7 +129,7 @@ Put the result in byte zero. The sum of all 24 header bytes must be zero modulo
 | 105 | Packed Cap'n Proto | `status/StatusMessage` |
 | 106 | Raw IEEE754 stream encoding | Floating-value stream data |
 | 107 | Text | Text stream data |
-| 108 | Elektron MessagePack | Alternating field IDs and field values |
+| 108 | fmtron MessagePack | Alternating field IDs and field values |
 
 Use type-0 announcements to associate each stream ID with its `peer:channel`
 name. The example reads names as UTF-8. Announcements precede data on their

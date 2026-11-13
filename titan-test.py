@@ -291,7 +291,7 @@ async def tcp_check(args, fixture, schema, tracker):
                     mappings.add((value.venueAccountMapping.identifier, value.venueAccountMapping.venueID))
                 elif value.which() == "venueSecurityAttribute":
                     attributes.add((value.venueSecurityAttribute.securityId, value.venueSecurityAttribute.venueID))
-            elif kind == tcp.ELEKTRON:
+            elif kind == tcp.FMTRON:
                 require(channel in streams, "Price record precedes channel announcement")
                 decoder = msgpack.Unpacker(raw=False)
                 decoder.feed(payload)

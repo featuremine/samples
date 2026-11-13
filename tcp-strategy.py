@@ -19,7 +19,7 @@ HEADER = struct.Struct("<BBHIqQ")
 SYMBOLOGY = 101
 VENUE_DATA = 102
 RISK_DATA = 103
-ELEKTRON = 108
+FMTRON = 108
 
 
 def frame(kind, payload, sequence, timestamp, stream=0):
@@ -144,14 +144,14 @@ async def main(args):
                     accounts.add(value.account.identifier)
                 elif value.which() == "position":
                     positions[value.position.accountId, value.position.securityId] = value.position.quantity
-            elif kind == ELEKTRON:
+            elif kind == FMTRON:
                 if stream not in streams:
-                    raise RuntimeError("Elektron message precedes stream announcement")
+                    raise RuntimeError("fmtron message precedes stream announcement")
                 decoder = msgpack.Unpacker(raw=False)
                 decoder.feed(payload)
                 values = list(decoder)
                 if decoder.tell() != len(payload) or len(values) % 2:
-                    raise RuntimeError("Incomplete Elektron field/value update")
+                    raise RuntimeError("Incomplete fmtron field/value update")
                 prices.setdefault(streams[stream], {}).update(zip(values[::2], values[1::2]))
             elif kind == 100 and orders_sent:
                 message = strategy.ManagerMessage.from_bytes_packed(payload)

@@ -32,7 +32,7 @@ announcement precedes data on that stream and can repeat after reconnection.
 Use `riskChannel.referenceId` and `channelName` from reference discovery to
 associate the price channel with a security identifier.
 
-Type-108 Elektron payloads contain consecutive MessagePack values: a field
+Type-108 fmtron payloads contain consecutive MessagePack values: a field
 identifier (FID), then its value. There is no enclosing array or map. A FID
 selects a value within the update; it is not a security identifier.
 
