@@ -1,6 +1,6 @@
 # Getting started
 
-This repository contains Python samples you can run with Featuremine's local
+This repository contains sample strategies you can run with Featuremine's local
 development environment or hosted services. Start with Titan to use real
 Kraken market data and simulated execution on your computer.
 
