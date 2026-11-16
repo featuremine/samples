@@ -48,7 +48,7 @@ view the available options.
 | --- | --- | --- | --- | --- |
 | [Asynchronous WebSocket](ws-strategy.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy.py --token "<TOKEN>"` |
 | [Synchronous WebSocket](ws-strategy-sync.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy-sync.py --token "<TOKEN>"` |
-| [TCP](tcp-strategy.py) | [TCP](docs/api/tcp-orders.md) | [TCP](docs/api/tcp-orders.md#reference-data) | [TCP](docs/api/tcp-market-data.md) | `python tcp-strategy.py --token "<TOKEN>"` |
+| [Carnitas](tcp-strategy.py) | [Carnitas](docs/api/tcp-orders.md) | [Carnitas](docs/api/tcp-orders.md#reference-data) | [Carnitas](docs/api/tcp-market-data.md) | `python tcp-strategy.py --token "<TOKEN>"` |
 
 The samples use Cap'n Proto schemas for [orders](strategy.capnp) and
 [reference data](reference.capnp), with [shared types](common.capnp).
@@ -63,5 +63,5 @@ describes the requests and responses, with examples.
 | [WebSocket order gateway](docs/api/ws-gateway.md) | 8034 | Submit orders and receive responses |
 | [REST reference data feed](docs/api/rest-reference.md) | 8036 | Retrieve accounts, securities, venues, positions, and limits |
 | [REST market data feed](docs/api/rest-market-data.md) | 8035 | Query the latest requested price fields |
-| [TCP order gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
-| [TCP market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |
+| [Carnitas gateway](docs/api/tcp-orders.md) | 8032 | Submit orders and receive reference data and order responses |
+| [Carnitas market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |

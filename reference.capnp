@@ -10,363 +10,394 @@ $Cxx.namespace("fmc");
 using C = import "c.capnp";
 $C.fieldgetset;
 
-const clientProtocolVersion :Int64 = 1;
-const serverProtocolVersion :Int64 = 1;
+const clientProtocolVersion :Int64 = 1;  # Client protocol version constant.
+const serverProtocolVersion :Int64 = 1;  # Server protocol version constant.
 
-# Venue definitions and mappings.
+# Venue definitions and routing attributes.
 struct Venue
 {
-    identifier            @0: UInt16;    # Venue identifier
-    code                  @1: Text;      # Broker code
-    exdest                @2: Text;      # Exdest
-    swapIndicator         @3: Bool;      # Swap indicator
-    locatesBrokerID       @4: Text;      # Locates broker identifier
+    identifier            @0: UInt16;    # Venue identifier.
+    code                  @1: Text;      # Broker or venue code.
+    exdest                @2: Text;      # Execution destination value.
+    swapIndicator         @3: Bool;      # Swap-related indicator.
+    locatesBrokerID       @4: Text;      # Broker identifier for locates.
 }
 
 
-# Attributes for a security at a venue.
+# Venue-specific identifiers and attributes for a security.
 struct VenueSecurityAttribute
 {
-    venueID       @0: UInt16;
-    securityId    @1: UInt64;    # Security identifier
-    scalingFactor @2: Float64;
-    symbol        @3: Text;
-    symbolSfx     @4: Text;
-    cfiCode       @5: Text;
-    idSource      @6: Text;
-    securityID    @7: Text;
-    securityExch  @8: Text;
+    venueID       @0: UInt16;  # Venue identifier.
+    securityId    @1: UInt64;    # Security identifier.
+    scalingFactor @2: Float64;  # Venue-specific scaling factor.
+    symbol        @3: Text;  # Venue-specific trading symbol.
+    symbolSfx     @4: Text;  # Venue-specific symbol suffix.
+    cfiCode       @5: Text;  # Instrument classification code.
+    idSource      @6: Text;  # Identifier scheme or source.
+    securityID    @7: Text;  # Value in the selected identifier scheme.
+    securityExch  @8: Text;  # Security exchange code.
 }
 
-# Accounts and their venue mappings.
+# Account identity, ownership, and aggregation units.
 struct Account
 {
-    identifier      @0: UInt64; # Account ID
-    aggUnit         @1: UInt32; # For aggregation at the account level
-    managerAggUnit  @2: UInt32; # Manager aggregation unit
-    client          @3: Text; # Client identity that owns this account
+    identifier      @0: UInt64; # Account identifier.
+    aggUnit         @1: UInt32; # Account-level aggregation unit.
+    managerAggUnit  @2: UInt32; # Manager aggregation unit.
+    client          @3: Text; # Client identity that owns this account.
 }
 
+# Maps an account to its venue account and request tags.
 struct VenueAccountMapping
 {
+    # A tagged text value attached to a venue request.
     struct CustomField {
-      tag @0 :UInt64;
-      value @1 :Text;
+      tag @0 :UInt64;  # Custom field identifier.
+      value @1 :Text;  # Text value for the custom field.
     }
-    identifier     @0: UInt64;  # Account ID
-    venueID        @1: UInt16;  # Venue identifier
-    venueAccount   @2: Text;    # Broker account - max 48 characters
-    placeTags      @3: List(CustomField);
-    cancelTags     @4: List(CustomField);
+    identifier     @0: UInt64;  # Account identifier.
+    venueID        @1: UInt16;  # Venue identifier.
+    venueAccount   @2: Text;    # Broker account value; maximum 48 characters.
+    placeTags      @3: List(CustomField);  # Custom tags for placement requests.
+    cancelTags     @4: List(CustomField);  # Custom tags for cancellation requests.
 }
 
+# Associates an account with a locate pool.
 struct LocatePool
 {
-    identifier     @0: UInt64;  # Account ID
-    locatePool     @1: UInt64;  # Locate pool ID
+    identifier     @0: UInt64;  # Account identifier.
+    locatePool     @1: UInt64;  # Locate pool identifier.
 }
 
+# Locate information for a security and locate pool.
 struct Locates
 {
-    securityID     @0: UInt64;
-    locatePool     @1: UInt64;
-    locate         @2: UInt32;
-    locateProvider @3: Text;
+    securityID     @0: UInt64;  # Security identifier.
+    locatePool     @1: UInt64;  # Locate pool identifier.
+    locate         @2: UInt32;  # Locate value for this security and pool.
+    locateProvider @3: Text;  # Provider associated with the locate.
 }
 
-# Security definitions.
+# The instrument category of a security.
 enum InstrumentType
 {
-    equity @0;
-    future @1;
-    fx    @2;
-    currency @3;
-    cryptoPair @4;
+    equity @0;  # Equity instrument.
+    future @1;  # Futures instrument.
+    fx    @2;  # Foreign-exchange instrument.
+    currency @3;  # Currency instrument.
+    cryptoPair @4;  # Cryptocurrency pair.
 }
 
-enum LegSide
-{
-    buy     @0;
-    sell    @1;
-}
-
+# The type of foreign-exchange instrument.
 enum FxType
 {
-    fxSpot  @0;
-    fxNdf   @1;
+    fxSpot  @0;  # Spot foreign exchange.
+    fxNdf   @1;  # Non-deliverable forward foreign exchange.
 }
 
+# The expiration year and month of a future.
 struct FutureExpiration
 {
-    year    @0: UInt16;
-    month    @1: UInt8;
+    year    @0: UInt16;  # Expiration year.
+    month    @1: UInt8;  # Expiration month.
 }
 
+# Identifies a spread leg and its ratio.
 struct FutureSpreadLeg
 {
-    identifier    @0: UInt64;    # Security identifier
-    ratio         @1: Float64;   # Ratio of this leg in a spread
+    identifier    @0: UInt64;    # Security identifier for the leg.
+    ratio         @1: Float64;   # Ratio of this leg in the spread.
 }
 
-# Published on the symbology channel.
+# Security identifiers, currency references, and asset-class details.
 struct SecurityDefinition
 {
+    # Quantity currency and instrument type for an FX pair.
     struct CurrencyPair
     {
-        quantityCurrency @0: UInt64;    # currency identifier for the destination currency
-        fxType           @1: FxType;
+        quantityCurrency @0: UInt64;    # Currency identifier in which quantity is expressed.
+        fxType           @1: FxType;  # Foreign-exchange instrument type.
     }
 
+    # Equity-specific security identifiers.
     struct Equity
     {
-        isin           @0: Text;
-        sedol          @1: Text;
+        isin           @0: Text;  # ISIN security identifier.
+        sedol          @1: Text;  # SEDOL security identifier.
     }
 
+    # Contract and expiration details for a future.
     struct Future $Go.name("Fut")
     {
+        # The component legs of a futures spread.
         struct Spread
         {
-            legs    @0: List(FutureSpreadLeg);
+            legs    @0: List(FutureSpreadLeg);  # Component legs and their ratios.
         }
 
-        multiplier    @0: Float64;
-        # Exchange root symbol.
-        product       @1: Text;
-        expiration    @2: FutureExpiration;
+        multiplier    @0: Float64;  # Contract multiplier value.
+        product       @1: Text;  # Exchange root symbol.
+        expiration    @2: FutureExpiration;  # Contract expiration year and month.
+        # Selects an outright future or a spread.
         futureType : union $Go.name("Kind") {
-            outright @3 : Void;
-            spread @4 : Spread;
+            outright @3 : Void;  # Outright future without spread-leg details.
+            spread @4 : Spread;  # Spread-leg details.
         }
     }
 
+    # Marks a security as a currency.
     struct Currency
     {
     }
 
+    # Quantity currency for a cryptocurrency pair.
     struct CryptoPair
     {
-        quantityCurrency @0: UInt64;    # currency identifier for the destination currency
+        quantityCurrency @0: UInt64;    # Currency identifier in which quantity is expressed.
     }
 
-    identifier        @0: UInt64;            # Security identifier
-    symbol            @1: Text;              # Maximum 32 characters
-    ric               @2: Text;              # Reuters identifier code - Max 16 characters
-    bloombergId       @3: Text;              # Bloomberg ID - Max 16 characters
-    instrumentType    @4: InstrumentType;
-    quoteCurrency     @5: UInt64;            # Identifier from Currency definition
+    identifier        @0: UInt64;            # Security identifier.
+    symbol            @1: Text;              # Security symbol; maximum 32 characters.
+    ric               @2: Text;              # RIC identifier; maximum 16 characters.
+    bloombergId       @3: Text;              # Bloomberg identifier; maximum 16 characters.
+    instrumentType    @4: InstrumentType;  # Instrument category.
+    quoteCurrency     @5: UInt64;            # Currency identifier for the quoted price.
 
+    # Selects the security's asset-class-specific attributes.
     assetClass : union
     {
-        future   @6: Future $Go.name("FutClass");
-        equity   @7: Equity;
-        fx       @8: CurrencyPair;
-        currency @9: Currency;
-        cryptoPair @12: CryptoPair;
+        future   @6: Future $Go.name("FutClass");  # Futures attributes.
+        equity   @7: Equity;  # Equity attributes.
+        fx       @8: CurrencyPair;  # Foreign-exchange pair attributes.
+        currency @9: Currency;  # Currency marker.
+        cryptoPair @12: CryptoPair;  # Cryptocurrency-pair attributes.
     }
 
+    # Notional bond terms for a yield-quoted instrument.
     struct YieldQuotedBond
     {
-        notionalIssueCoupon      @0 : Int64;
-        couponFrequency          @1 : Int64;
-        notionalMaturityDateYear @2 : UInt16;
-        daysPerYear              @3 : UInt16;
+        notionalIssueCoupon      @0 : Int64;  # Notional issue coupon value.
+        couponFrequency          @1 : Int64;  # Coupon-frequency value.
+        notionalMaturityDateYear @2 : UInt16;  # Notional maturity year.
+        daysPerYear              @3 : UInt16;  # Day-count year length.
     }
 
+    # Selects optional notional valuation details.
     notionalType : union
     {
-        none                     @10 : Void;
-        yieldQuotedBond          @11 : YieldQuotedBond;
+        none                     @10 : Void;  # No notional valuation details.
+        yieldQuotedBond          @11 : YieldQuotedBond;  # Yield-quoted bond details.
     }
 
-    compositeFigi     @13: Text;             # Composite Bloomberg ID - Max 16 characters
+    compositeFigi     @13: Text;             # Composite FIGI identifier; maximum 16 characters.
 }
 
+# Identifies a reference-rate security and its currency pair.
 struct ReferenceFxRateSecurity
 {
-    referenceId      @0: UInt64;    # Identifier for this reference rate security
-    baseId           @1: UInt64;    # Currency identifier for the base currency
-    destinationId    @2: UInt64;    # currency identifier for the destination currency
+    referenceId      @0: UInt64;    # Identifier for the reference-rate security.
+    baseId           @1: UInt64;    # Currency identifier for the base currency.
+    destinationId    @2: UInt64;    # Currency identifier for the destination currency.
                                      # e.g. In EURUSD reference rate:
                                      #    (*)  _baseId refers to the currency ID for EUR
                                      #    (*) _destinationId is the current ID for USD
 }
 
+# Associates a currency pair with its reference-rate channel.
 struct ReferenceFxRateChannel
 {
-    baseId           @0: UInt64;    # Currency identifier for the base currency
-    destinationId    @1: UInt64;    # currency identifier for the destination currency
+    baseId           @0: UInt64;    # Currency identifier for the base currency.
+    destinationId    @1: UInt64;    # Currency identifier for the destination currency.
                                      # e.g. In EURUSD reference rate:
                                      #    (*)  _baseId refers to the currency ID for EUR
                                      #    (*) _destinationId is the current ID for USD
-    channelName      @2: Text;      # Channel Name
+    channelName      @2: Text;      # Channel carrying the reference-rate data.
 }
 
+# Associates a security identifier with its data channel.
 struct RiskChannel
 {
-    referenceId      @0: UInt64;    # Identifier of the security
-    channelName      @1: Text;      # Channel Name
+    referenceId      @0: UInt64;    # Security identifier.
+    channelName      @1: Text;      # Channel associated with the security.
 }
 
+# Associates a security and venue with their data channel.
 struct RiskVenueChannel
 {
-    securityId      @0: UInt64;    # Identifier of the security
-    venueId         @1: UInt64;    # Identifier of the venue
-    channelName     @2: Text;      # Channel Name
+    securityId      @0: UInt64;    # Security identifier.
+    venueId         @1: UInt64;    # Venue identifier.
+    channelName     @2: Text;      # Channel associated with the security and venue.
 }
 
+# A currency identifier and its name or code.
 struct Currency
 {
-    identifier    @0: UInt64;
-    currency      @1: Text; # e.g. EURO, USD, JPY, AUD, etc.
+    identifier    @0: UInt64;  # Currency identifier.
+    currency      @1: Text; # Currency name or code, such as USD or JPY.
 }
 
-# Risk information.
+# The trading stage to which a risk limit applies.
 enum RiskType
 {
-    postTrade            @0;
-    preTrade             @1;
-    preAndPostTrade      @2;
+    postTrade            @0;  # Post-trade risk.
+    preTrade             @1;  # Pre-trade risk.
+    preAndPostTrade      @2;  # Pre-trade and post-trade risk.
 }
 
+# Defines a limit identifier, type, and description.
 struct LimitMaster
 {
-    limitId        @0: UInt64;
-    limitType      @1: Text;     # GMV, NMV, SOQ, etc
-    description    @2: Text;
+    limitId        @0: UInt64;  # Limit identifier.
+    limitType      @1: Text;     # Limit type code, such as GMV, NMV, or SOQ.
+    description    @2: Text;  # Description of the limit.
 }
 
+# A risk limit with currency, scope, and type-specific parameters.
 struct RiskLimit
 {
-    riskCurrencyId           @0: UInt64;  # Identifier from Currency definition
-    limitId                  @1: UInt64;
-    riskType                 @2: RiskType;
-    limitValue               @3: Float64;
-    limitParameters          @4: List(Float64);
+    riskCurrencyId           @0: UInt64;  # Currency identifier for the limit.
+    limitId                  @1: UInt64;  # Identifier from the limit definitions.
+    riskType                 @2: RiskType;  # Trading stage to which the limit applies.
+    limitValue               @3: Float64;  # Configured limit value.
+    limitParameters          @4: List(Float64);  # Additional parameters for the selected limit type.
 
+    # Selects the account, aggregation unit, or portfolio scope.
     riskAggLevelId : union
     {
-        accountId   @5 : UInt64;
-        aggunitId   @6 : UInt64;
-        portfolioId @7 : UInt64;
+        accountId   @5 : UInt64;  # Account identifier for the limit scope.
+        aggunitId   @6 : UInt64;  # Aggregation-unit identifier for the limit scope.
+        portfolioId @7 : UInt64;  # Portfolio identifier for the limit scope.
     }
+    # Selects the security-level scope for aggregation.
     symbolAggregation : union {
-        contract   @8 : UInt64;
-        product   @9 : Text;
-        none @10 : Void;
+        contract   @8 : UInt64;  # Contract identifier for symbol aggregation.
+        product   @9 : Text;  # Product value for symbol aggregation.
+        none @10 : Void;  # No symbol-level aggregation selection.
     }
 }
 
+# A marking limit with its scope and type-specific parameters.
 struct MarkingLimit
 {
-    limitId                  @0: UInt64;
-    limitValue               @1: Float64;
-    limitParameters          @2: List(Float64);
+    limitId                  @0: UInt64;  # Identifier from the limit definitions.
+    limitValue               @1: Float64;  # Configured limit value.
+    limitParameters          @2: List(Float64);  # Additional parameters for the selected limit type.
 
+    # Selects the account, aggregation unit, or portfolio scope.
     markingAggLevelId : union
     {
-        accountId   @3 : UInt64;
-        aggunitId   @4 : UInt64;
-        portfolioId @5 : UInt64;
+        accountId   @3 : UInt64;  # Account identifier for the limit scope.
+        aggunitId   @4 : UInt64;  # Aggregation-unit identifier for the limit scope.
+        portfolioId @5 : UInt64;  # Portfolio identifier for the limit scope.
     }
+    # Selects the security-level scope for aggregation.
     symbolAggregation : union
     {
-        contract   @6 : UInt64;
-        product   @7 : Text;
-        none @8 : Void;
+        contract   @6 : UInt64;  # Contract identifier for symbol aggregation.
+        product   @7 : Text;  # Product value for symbol aggregation.
+        none @8 : Void;  # No symbol-level aggregation selection.
     }
 }
 
-# Published on the position channel.
+# Account position and close price, published on the position channel.
 struct Position
 {
-    securityId               @0: UInt64;    # Security identifier
-    accountId                @1: UInt64;    # Account identifier
-    quantity                 @2: Int64;     # Account position
-    closePrice               @3: Float64;   # Security close price
+    securityId               @0: UInt64;    # Security identifier.
+    accountId                @1: UInt64;    # Account identifier.
+    quantity                 @2: Int64;     # Account position.
+    closePrice               @3: Float64;   # Security close price.
 }
 
+# Account position and close price represented as text.
 struct Position2
 {
-    securityId               @0: UInt64;    # Security identifier
-    accountId                @1: UInt64;    # Account identifier
-    quantity                 @2: Text;      # Account position
-    closePrice               @3: Text;      # Security close price
+    securityId               @0: UInt64;    # Security identifier.
+    accountId                @1: UInt64;    # Account identifier.
+    quantity                 @2: Text;      # Account position as text.
+    closePrice               @3: Text;      # Security close price as text.
 }
 
+# A security's close price and instrument type.
 struct ClosePrice
 {
-    securityId               @0: UInt64;            # Security identifier
-    closePrice               @1: Float64;           # Security close price
-    instrumentType           @2: InstrumentType;    # Instrument type
+    securityId               @0: UInt64;            # Security identifier.
+    closePrice               @1: Float64;           # Security close price.
+    instrumentType           @2: InstrumentType;    # Instrument category.
 }
 
+# A security's bid, ask, last price, and update timestamp.
 struct MarketDataUpdate
 {
-    instrumentType    @0: InstrumentType;
-    securityId        @1: UInt64;
-    bid               @2: Float64;
-    ask               @3: Float64;
-    lastPrice         @4: Float64;
-    timestamp         @5: Int64;
+    instrumentType    @0: InstrumentType;  # Instrument category.
+    securityId        @1: UInt64;  # Security identifier.
+    bid               @2: Float64;  # Bid price.
+    ask               @3: Float64;  # Ask price.
+    lastPrice         @4: Float64;  # Last price.
+    timestamp         @5: Int64;  # Timestamp associated with this update.
 }
 
+# Trading restriction flags for an account and security.
 struct TradingRestriction
 {
-    account           @0: UInt64;
-    securityId        @1: UInt64;
-    instrumentType    @2: InstrumentType;
-    longRestriction   @3: Bool;
-    shortRestriction  @4: Bool;
-    tradeRestriction  @5: Bool;
+    account           @0: UInt64;  # Account identifier.
+    securityId        @1: UInt64;  # Security identifier.
+    instrumentType    @2: InstrumentType;  # Instrument category.
+    longRestriction   @3: Bool;  # Whether a long-side restriction is set.
+    shortRestriction  @4: Bool;  # Whether a short-side restriction is set.
+    tradeRestriction  @5: Bool;  # Whether a trading restriction is set.
 }
 
-# Messages for the symbology channel
+# Envelope for security, currency, and channel reference messages.
 struct Symbology
 {
+    # Selects the symbology message payload.
     message : union
     {
-        securityDefinition      @0: SecurityDefinition;
-        currency                @1: Currency;
-        referenceFxRateSecurity @2: ReferenceFxRateSecurity;
-        referenceFxRateChannel  @3: ReferenceFxRateChannel;
-        riskChannel             @4: RiskChannel;
-        riskVenueChannel        @5: RiskVenueChannel;
+        securityDefinition      @0: SecurityDefinition;  # Security-definition record.
+        currency                @1: Currency;  # Currency record.
+        referenceFxRateSecurity @2: ReferenceFxRateSecurity;  # Reference-rate security definition.
+        referenceFxRateChannel  @3: ReferenceFxRateChannel;  # Reference-rate channel mapping.
+        riskChannel             @4: RiskChannel;  # Security-to-channel mapping.
+        riskVenueChannel        @5: RiskVenueChannel;  # Security-and-venue channel mapping.
     }
 }
 
+# Envelope for venue definitions and account or security mappings.
 struct VenueData {
+    # Selects the venue-data payload.
     message : union {
-        venue                  @0: Venue;
-        venueSecurityAttribute @1: VenueSecurityAttribute;
-        venueAccountMapping    @2: VenueAccountMapping;
+        venue                  @0: Venue;  # Venue definition.
+        venueSecurityAttribute @1: VenueSecurityAttribute;  # Venue-specific security attributes.
+        venueAccountMapping    @2: VenueAccountMapping;  # Account-to-venue mapping.
     }
 }
 
-# Messages for the risk channel
+# Envelope for account, locate, limit, restriction, or position data.
 struct RiskData
 {
+    # Selects the risk-data payload.
     message : union
     {
-        account            @0: Account;
-        locatePool         @1: LocatePool;
-        locates            @2: Locates;
-        limitMaster        @3: LimitMaster;
-        riskLimit          @4: RiskLimit;
-        tradingRestriction @5: TradingRestriction;
-        position           @6: Position;
-        position2          @7: Position2;
-        markingLimit       @8: MarkingLimit;
+        account            @0: Account;  # Account definition.
+        locatePool         @1: LocatePool;  # Account-to-locate-pool mapping.
+        locates            @2: Locates;  # Security locate information.
+        limitMaster        @3: LimitMaster;  # Limit definition.
+        riskLimit          @4: RiskLimit;  # Risk-limit configuration.
+        tradingRestriction @5: TradingRestriction;  # Account and security restriction flags.
+        position           @6: Position;  # Numeric account position.
+        position2          @7: Position2;  # Account position represented as text.
+        markingLimit       @8: MarkingLimit;  # Marking-limit configuration.
     }
 }
 
-# Messages for the marketdata channel
+# Envelope for close prices and market-data updates.
 struct MarketData
 {
+    # Selects the market-data payload.
     message : union
     {
-        closePrice       @0: ClosePrice;
-        marketDataUpdate @1: MarketDataUpdate;
+        closePrice       @0: ClosePrice;  # Security close-price record.
+        marketDataUpdate @1: MarketDataUpdate;  # Bid, ask, and last-price update.
     }
 }
 

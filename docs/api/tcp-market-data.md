@@ -1,9 +1,10 @@
-# TCP market data feed
+# Carnitas market data feed
 
-Use the TCP market data feed to receive streamed prices. Retrieve security
+Use the Carnitas market data feed to receive streamed prices. Retrieve security
 definitions and price-channel mappings through the
-[TCP order gateway](tcp-orders.md#reference-data), then associate updates with
-those securities. The [TCP example](../../tcp-strategy.py) combines both feeds.
+[Carnitas gateway](tcp-orders.md#reference-data), then associate updates with
+those securities. The [Carnitas example](../../tcp-strategy.py) combines both
+feeds.
 
 ## Connection and authentication
 
@@ -11,10 +12,11 @@ Connect to the running session's market-data port, 8033 by default. Use the
 complete 256-byte ASCII **Order-entry token** in the client handshake.
 Titan's embedded listener uses plain TCP.
 
-Use the [shared TCP transport](tcp-orders.md#tcp-transport) for the handshake,
-headers, checksums, message types, and framing. Read the complete server
-handshake before receiving data. Stream IDs and recovery counts belong to each
-connection separately, including when both connections use the same token.
+Use the [shared Carnitas protocol](tcp-orders.md#carnitas-protocol) for the
+handshake, headers, checksums, message types, and framing. Read the complete
+server handshake before receiving data. Stream IDs and recovery counts belong
+to each connection separately, including when both connections use the same
+token.
 
 ## Requests
 
@@ -47,7 +49,7 @@ selects a value within the update; it is not a security identifier.
 
 Update the cached fields for that channel. An update can omit earlier fields;
 retain their cached values. Other data encodings are identified by the
-[TCP message type](tcp-orders.md#message-types-and-stream-announcements).
+[Carnitas message type](tcp-orders.md#message-types-and-stream-announcements).
 
 ## Example
 
@@ -81,7 +83,8 @@ use [strategy.capnp](../../strategy.capnp).
 Use a separate recovery count for this connection. Count server data records
 but exclude stream announcements. Read the
 advertised catch-up count before treating initial recovery as complete.
-The TCP example finishes recovery on both connections before choosing orders.
+The Carnitas example finishes recovery on both connections before choosing
+orders.
 
 Transport sequences count selected records for this connection, modulo 2³².
 See [Recovery and sequence numbers](tcp-orders.md#recovery-and-sequence-numbers)

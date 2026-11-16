@@ -1,12 +1,15 @@
-# TCP order gateway
+# Carnitas gateway
 
-Use the TCP order gateway to retrieve reference data, submit orders, and
+Carnitas is Featuremine’s TCP-based protocol for exchanging reference data,
+market data, orders, and order updates.
+
+Use the Carnitas gateway to retrieve reference data, submit orders, and
 receive order updates. Prices arrive through the separate
-[TCP market data feed](tcp-market-data.md). Both services use the TCP transport
-defined in this guide.
+[Carnitas market data feed](tcp-market-data.md). Both services use the Carnitas
+protocol defined in this guide.
 
 For a local run, see [Getting started](../../README.md). The documented
-[TCP example](../../tcp-strategy.py) combines both connections.
+[Carnitas example](../../tcp-strategy.py) combines both connections.
 
 ## Connection and authentication
 
@@ -19,29 +22,27 @@ channels. Use account, security, and venue identifiers from the running
 session's reference data. In Titan, the token routes orders to the first
 configured venue; use one venue with the bundled examples.
 
-Titan's embedded listener uses plain TCP. The TCP example has no TLS option.
+Titan's embedded listener uses plain TCP. The Carnitas example has no TLS option.
 
-## TCP transport
+## Carnitas protocol
 
 The handshake, data headers, recovery counts, transport heartbeats, and logout
-procedure below also apply to the TCP market data feed. Handle partial socket
-reads and writes on both connections.
+procedure below also apply to the Carnitas market data feed. Handle partial
+socket reads and writes on both connections.
 
 ### Versions and encoding
 
 Use the eight-byte magic `tcn v031` for transport version v031. The application
-schema version is separate and is defined in
-[schemas_version.capnp](../../schemas_version.capnp). The bundled version is
-1.0.11.
+schema version is separate. The Carnitas example uses 1.0.11.
 
-All TCP header and handshake integers are little-endian. Cap'n Proto payloads
-use packed encoding. Other payloads use the encoding selected by their message
-type.
+All Carnitas header and handshake integers are little-endian. Cap'n Proto
+payloads use packed encoding. Other payloads use the encoding selected by their
+message type.
 
 The client and server schema major versions must match. The client minor
 version must be at least the server minor version; the server ignores the
-patch version for this check. The TCP example requires an exact match for all
-three schema-version fields and the server's returned magic.
+patch version for this check. The Carnitas example requires an exact match for
+all three schema-version fields and the server's returned magic.
 
 ### Common handshake header
 
@@ -144,10 +145,10 @@ bundled here.
 
 ## Reference data
 
-Select the schema from the TCP message type, decode the packed payload, and
+Select the schema from the Carnitas message type, decode the packed payload, and
 read its `message` union:
 
-| TCP type | Schema | Reference data |
+| Carnitas type | Schema | Reference data |
 | ---: | --- | --- |
 | 101 | `reference/Symbology` | `securityDefinition`, `riskChannel` |
 | 102 | `reference/VenueData` | `venueAccountMapping`, `venueSecurityAttribute` |
@@ -252,9 +253,10 @@ message = strategy.ManagerMessage.from_bytes_packed(payload)
 kind = message.message.which()
 ```
 
-Use `strgOrdID` to match replies to orders. Track TCP transport sequence numbers
-separately from `ManagerMessage.seqnum`. Each output channel has its own
-application sequence; use the TCP stream identifier to distinguish channels.
+Use `strgOrdID` to match replies to orders. Track Carnitas transport sequence
+numbers separately from `ManagerMessage.seqnum`. Each output channel has its
+own application sequence; use the Carnitas stream identifier to distinguish
+channels.
 
 `message.ctrl.placeForwarded`, `cancelForwarded`, and `replaceForwarded`
 acknowledge forwarding. Keep reading execution or rejection responses after
@@ -268,15 +270,15 @@ cumulative quantity, and remaining quantity.
 
 Session `logon`, `heartbeat`, and `logout` messages track the execution session.
 Titan also publishes its main-session status on a separate broadcast channel
-through TCP; that broadcast is absent from WebSocket replies.
+through the Carnitas gateway; that broadcast is absent from WebSocket replies.
 
 ## Recovery and sequence numbers
 
 Set the handshake recovery count to the number of server data records already
 received for that connection's token and service. Do not count stream
 announcements. Read the advertised catch-up records, then continue with live
-data. The TCP example requests full replay on both connections before choosing
-its new batch; historical order replies do not complete that batch.
+data. The Carnitas example requests full replay on both connections before
+choosing its new batch; historical order replies do not complete that batch.
 
 A server data record's transport sequence is one plus the number of selected
 data records preceding it, modulo 2³². Announcement sequence and timestamp
@@ -291,7 +293,7 @@ Retain application order identifiers separately.
 
 Send messages within the configured socket timeout, 90 seconds by default.
 An empty type-1 transport heartbeat keeps an idle connection active. It is
-separate from OMS and session heartbeats inside `ManagerMessage`. The TCP
+separate from OMS and session heartbeats inside `ManagerMessage`. The Carnitas
 example sends it every 10 seconds on both connections while waiting for data
 or order responses.
 
@@ -303,5 +305,5 @@ close. Check all 24 bytes when identifying a logout frame.
 
 Authentication failures, incompatible schema versions, malformed frames,
 invalid checksums, and invalid recovery offsets close the TCP connection.
-These failures have no structured TCP error reply. Handle application request
+These failures have no structured Carnitas error reply. Handle application request
 failures separately using the response messages above.

@@ -55,8 +55,7 @@ def usable_quotes(fields):
 
 async def main(args):
     """Recover reference/prices, send one IOC batch, then await terminal replies."""
-    version = capnp.load(str(args.schemas / "schemas_version.capnp"))
-    expected = (version.schemasVersionMajor, version.schemasVersionMinor, version.schemasVersionPatch)
+    version = (1, 0, 11)
     strategy = capnp.load(str(args.schemas / "strategy.capnp"))
     reference = capnp.load(str(args.schemas / "reference.capnp"))
     if len(args.token) != 256 or not args.token.isascii():
@@ -72,12 +71,12 @@ async def main(args):
                           "sequence": 0, "received": 0, "catchup": 0}
             connections.append(connection)
             # Recovery offset zero requests all history on this token's route.
-            writer.write(HANDSHAKE.pack(MAGIC, *expected, 264) + token + struct.pack("<Q", 0))
+            writer.write(HANDSHAKE.pack(MAGIC, *version, 264) + token + struct.pack("<Q", 0))
             await writer.drain()
             hello = await asyncio.wait_for(reader.readexactly(32), args.timeout)
             magic, major, minor, patch, size = HANDSHAKE.unpack(hello[:16])
             # This sample requires an exact schema-version match on both services.
-            if magic != MAGIC or (major, minor, patch) != expected or size != 16:
+            if magic != MAGIC or (major, minor, patch) != version or size != 16:
                 raise RuntimeError("Carnitas handshake or schema version mismatch")
             # Transport sequences and catch-up counts belong to each connection.
             connection["sequence"], connection["catchup"] = struct.unpack("<QQ", hello[16:])

@@ -3,7 +3,7 @@
 Use the WebSocket gateway to submit orders and receive responses. Retrieve
 reference data through the [REST reference data feed](rest-reference.md) and
 prices through the [REST market data feed](rest-market-data.md). Order messages
-use the same Cap'n Proto schema as the [TCP order gateway](tcp-orders.md).
+use the same Cap'n Proto schema as the [Carnitas gateway](tcp-orders.md).
 
 For a local run, see [Getting started](../../README.md). The documented
 [asynchronous](../../ws-strategy.py) and
@@ -46,12 +46,11 @@ Submit orders for that venue; changing `venueID` does not select another route.
 Binary application messages contain packed Cap'n Proto
 `strategy/ManagerMessage` payloads from [strategy.capnp](../../strategy.capnp).
 There is no schema-version handshake. Use application schemas compatible with
-the service. The bundled
-[schema version](../../schemas_version.capnp) is 1.0.11.
+the service. The bundled schemas use version 1.0.11.
 
 The first application message from the server is a JSON text recovery
 announcement. Subsequent responses are binary messages. WebSocket supplies the
-framing; application messages contain no Carnitas TCP envelope.
+framing; application messages contain no Carnitas envelope.
 
 ## Integration stages
 
@@ -124,7 +123,7 @@ The server captures a recovery boundary. `received` counts records on the
 request stream selected by your token before that boundary. `pending` counts
 records on the selected response stream after the skip and before that boundary.
 The counts include other producers writing to those same streams. Titan's
-TCP and WebSocket order-entry routes share the request stream, so TCP
+Carnitas and WebSocket order-entry routes share the request stream, so Carnitas
 submissions also contribute to `received`.
 
 The optional `x-wssyncer-skipmessages` header supplies the number of historical
@@ -142,7 +141,7 @@ Neither count confirms execution of an order.
 Recovery and live replies come from the response stream selected by your token.
 The order management system (OMS) control/status channel is separate. Messages
 sent only on that channel are absent from WebSocket replies. Titan's main-session
-broadcast status is available through TCP.
+broadcast status is available through the Carnitas gateway.
 
 The [asynchronous example](../../ws-strategy.py) validates the announcement and
 discards all pending replies before submitting its new batch. Its code
@@ -156,8 +155,8 @@ Use the bundled [strategy schema](../../strategy.capnp) and
 [common types](../../common.capnp) to construct and decode payloads. Send one
 packed `strategy/ManagerMessage` in each nonempty binary application message.
 Each binary response uses the same message format and contains one response
-record. Payloads contain no TCP magic, handshake header, data header, checksum,
-or stream announcement.
+record. Payloads contain no Carnitas magic, handshake header, data header,
+checksum, or stream announcement.
 
 A binary message may span multiple WebSocket fragments. The fragments form one
 application message. Empty client binary messages are ignored; client text
@@ -170,7 +169,7 @@ submitted as separate requests.
 
 Set `message.strg` to `new`, `cancel`, or `replace`, or use `new2`/`replace2`
 for text prices and quantities. Support depends on the OMS or execution service.
-The encoder in the [TCP order gateway guide](tcp-orders.md#example) constructs
+The encoder in the [Carnitas gateway guide](tcp-orders.md#example) constructs
 the same packed payload. Send the returned bytes as a binary WebSocket message.
 
 Use a distinct `strgOrdID` for each new order you submit under the same client

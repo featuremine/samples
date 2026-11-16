@@ -35,8 +35,6 @@ tcp = load("tcp-strategy.py")
 ws = load("ws-strategy.py")
 strategy = capnp.load(str(ROOT / "strategy.capnp"))
 reference = capnp.load(str(ROOT / "reference.capnp"))
-version = capnp.load(str(ROOT / "schemas_version.capnp"))
-
 
 def packed(schema, fields):
     message = schema.new_message()
@@ -156,8 +154,7 @@ class TcpStrategyTests(unittest.TestCase):
             for account in (1, 2):
                 add(tcp.RISK_DATA, reference.RiskData, {"account": {"identifier": account}})
                 add(tcp.VENUE_DATA, reference.VenueData, {"venueAccountMapping": {"identifier": account, "venueID": 1}})
-            hello = tcp.HANDSHAKE.pack(tcp.MAGIC, version.schemasVersionMajor,
-                                       version.schemasVersionMinor, version.schemasVersionPatch, 16)
+            hello = tcp.HANDSHAKE.pack(tcp.MAGIC, 1, 0, 11, 16)
             orders_reader.feed_data(hello + struct.pack("<QQ", 0, len(snapshots)) + b"".join(snapshots))
             fields = {22: 99, 730: 4, 25: 100, 735: 0.4}
             payload = b"".join(msgpack.packb(value) for pair in fields.items() for value in pair)

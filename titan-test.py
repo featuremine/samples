@@ -236,9 +236,8 @@ async def websocket_check(args, fixture, schema, tracker):
 
 
 async def tcp_check(args, fixture, schema, tracker):
-    """Recover both TCP services and validate each announced output separately."""
-    version = capnp.load(str(args.schemas / "schemas_version.capnp"))
-    expected = (version.schemasVersionMajor, version.schemasVersionMinor, version.schemasVersionPatch)
+    """Recover both Carnitas services and validate each announced output separately."""
+    version = (1, 0, 11)
     reference_schema = capnp.load(str(args.schemas / "reference.capnp"))
     connections = []
     streams, securities, channels, prices = {}, {}, {}, {}
@@ -248,12 +247,12 @@ async def tcp_check(args, fixture, schema, tracker):
             reader, writer = await asyncio.open_connection(fixture["host"], fixture[name])
             state = {"reader": reader, "writer": writer, "task": None, "received": 0}
             connections.append(state)
-            writer.write(tcp.HANDSHAKE.pack(tcp.MAGIC, *expected, 264)
+            writer.write(tcp.HANDSHAKE.pack(tcp.MAGIC, *version, 264)
                          + fixture["token"].encode("ascii") + struct.pack("<Q", 0))
             await writer.drain()
             hello = await reader.readexactly(32)
-            require(tcp.HANDSHAKE.unpack(hello[:16]) == (tcp.MAGIC, *expected, 16),
-                    "TCP handshake or schema mismatch")
+            require(tcp.HANDSHAKE.unpack(hello[:16]) == (tcp.MAGIC, *version, 16),
+                    "Carnitas handshake or schema mismatch")
             state["sequence"], state["catchup"] = struct.unpack("<QQ", hello[16:])
         sent = False
         choices = []
@@ -297,7 +296,7 @@ async def tcp_check(args, fixture, schema, tracker):
                 decoder.feed(payload)
                 values = list(decoder)
                 require(decoder.tell() == len(payload) and len(values) % 2 == 0,
-                        "Incomplete TCP price record")
+                        "Incomplete Carnitas price record")
                 prices.setdefault(streams[channel], {}).update(zip(values[::2], values[1::2]))
             if not sent and all(item["received"] >= item["catchup"] for item in connections):
                 by_security = {security: prices.get(channels.get(security), {}) for security in securities}
