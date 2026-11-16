@@ -1,6 +1,6 @@
 # API reference
 
-These guides describe the order gateways and data feeds used by the examples.
+These guides describe the services used by the examples.
 
 | Interface | Purpose |
 | --- | --- |
