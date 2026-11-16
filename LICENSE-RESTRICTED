@@ -1,0 +1,54 @@
+# Featuremine Proprietary License - All Rights Reserved
+
+Copyright (c) 2026 Featuremine. All rights reserved.
+
+## 1. Scope
+
+This license applies to all files explicitly designated as subject to the Featuremine Restricted-Use License ("Restricted Materials"), including applicable schema definitions, strategy files, and associated materials.
+
+The Restricted Materials are proprietary to Featuremine and are expressly excluded from the MIT License applicable to other parts of this repository.
+
+## 2. Reservation of Rights
+
+All rights to the Restricted Materials are reserved by Featuremine.
+
+No license or permission to use, copy, modify, distribute, sublicense, or otherwise exploit the Restricted Materials is granted except through prior explicit written authorization from Featuremine.
+
+Access to this repository, possession of the Restricted Materials, or authorization to access Featuremine products, services, systems, or APIs does not constitute permission to use or modify the Restricted Materials.
+
+## 3. Restrictions
+
+Unless expressly authorized in writing by Featuremine, the following activities are prohibited:
+
+- Using or executing the Restricted Materials for any purpose, including internal, personal, or commercial purposes.
+- Copying, reproducing, modifying, adapting, or creating derivative works from the Restricted Materials.
+- Developing, testing, deploying, or maintaining integrations or other software using the Restricted Materials.
+- Redistributing, publishing, sharing, selling, sublicensing, or transferring the Restricted Materials, whether modified or unmodified.
+- Incorporating the Restricted Materials into other software, products, services, or systems.
+- Removing or altering copyright, ownership, or proprietary notices.
+
+These restrictions apply regardless of whether the intended activities involve Featuremine products or services, except to the extent expressly authorized by Featuremine or permitted by applicable law.
+
+## 4. Written Authorization
+
+Any use, copying, modification, redistribution, or other activity involving the Restricted Materials requires prior explicit written authorization from Featuremine.
+
+Such authorization must be issued by an authorized Featuremine representative and must specify or clearly identify the permitted activities and their scope.
+
+Any authorization is limited to its expressly permitted scope and does not grant additional rights, including redistribution or sublicensing rights, unless explicitly stated.
+
+## 5. Ownership
+
+All rights, title, and interest in the original Restricted Materials remain with Featuremine or their respective rights holders.
+
+No intellectual property rights are transferred under this license.
+
+## 6. Separate Agreements
+
+Where a separate written agreement with Featuremine expressly grants rights concerning the Restricted Materials, that agreement governs those rights to the extent of any conflict with this license.
+
+## 7. Disclaimer
+
+THE RESTRICTED MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, FEATUREMINE SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE RESTRICTED MATERIALS.

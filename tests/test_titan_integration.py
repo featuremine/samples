@@ -1,3 +1,13 @@
+# Copyright (c) 2026 Featuremine. All rights reserved.
+#
+# Featuremine Proprietary - Restricted Use.
+#
+# This file is not covered by the repository's MIT License.
+# Use, copying, modification, and redistribution require
+# prior explicit written authorization from Featuremine.
+#
+# See LICENSE-RESTRICTED for the complete license terms.
+
 """Optional real local integration; set TITAN_TEST_FIXTURE to its executable."""
 
 import json

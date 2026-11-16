@@ -9,6 +9,9 @@ Request Titan access through the
 
 ## Run a strategy
 
+Obtain explicit written authorization from Featuremine to run the sample
+strategies, as required by the [proprietary license](LICENSE-RESTRICTED).
+
 Install [Python 3.9 or later](https://www.python.org/downloads/); we recommend
 using a [virtual environment](https://docs.python.org/3/library/venv.html).
 From the repository root, install the requirements:
@@ -37,8 +40,7 @@ connected.
 
 ## Strategies
 
-The *ws-strategy.py* strategy uses our REST based API for reference and market data and websocket based API for
-for order entry. These APIs are best for rapid prototyping and quickly deploying your strategies to market.
+The *ws-strategy.py* strategy uses our REST based API for reference and market data and websocket based API for order entry. These APIs are best for rapid prototyping and quickly deploying your strategies to market.
 We also have low latency APIs that suit a stategy that require higher performance. You can refer to *tcp-strategy.py*
 for the example of their usage.
 
@@ -67,3 +69,14 @@ describes the requests and responses, with examples.
 
 We use Cap'n Proto schemas for [orders](strategy.capnp) and
 [reference data](reference.capnp). Each service guide documents their usage with example.
+
+## License
+
+This repository is licensed under the [MIT License](LICENSE),
+except for files that explicitly specify a different license in their headers.
+
+Files marked as Featuremine Proprietary are covered by the
+[Featuremine Proprietary License](LICENSE-RESTRICTED). Using, copying,
+modifying, or redistributing these files requires prior explicit written
+authorization from Featuremine. Access to Featuremine products or services
+alone does not grant these permissions.
