@@ -9,8 +9,9 @@ Request Titan access through the
 
 ## Run a strategy
 
-Obtain explicit written authorization from Featuremine to run the sample
-strategies, as required by the [proprietary license](LICENSE-RESTRICTED).
+These sample strategies may be used and modified only for use with local
+Featuremine Titan or Featuremine-owned hosted services, under the
+[proprietary license](LICENSE-RESTRICTED).
 
 Install [Python 3.9 or later](https://www.python.org/downloads/); we recommend
 using a [virtual environment](https://docs.python.org/3/library/venv.html).
@@ -76,7 +77,8 @@ This repository is licensed under the [MIT License](LICENSE),
 except for files that explicitly specify a different license in their headers.
 
 Files marked as Featuremine Proprietary are covered by the
-[Featuremine Proprietary License](LICENSE-RESTRICTED). Using, copying,
-modifying, or redistributing these files requires prior explicit written
-authorization from Featuremine. Access to Featuremine products or services
-alone does not grant these permissions.
+[Featuremine Proprietary License](LICENSE-RESTRICTED). It permits use, copying,
+and modification solely for use with local Featuremine Titan or
+Featuremine-owned hosted services. Original and modified copies must retain
+this license and all original notices. Sharing and redistribution require
+prior written authorization from Featuremine.
