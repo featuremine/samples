@@ -22,8 +22,7 @@ the broker account field. Use identifiers from the running session rather
 than assuming values from a different profile or recording.
 
 Start a new session after changing client identities or account definitions;
-existing recordings keep their original definitions. For a local run, see
-[Getting started](../../README.md#run-a-strategy).
+existing recordings keep their original definitions.
 
 ## Requests
 
@@ -100,8 +99,8 @@ def read_accounts(host, port, token, timeout=30, tls=False):
 
 Use returned security identifiers to query the
 [REST market data feed](rest-market-data.md). The documented
-[asynchronous](../../ws-strategy.py) and
-[synchronous](../../ws-strategy-sync.py) examples combine reference discovery
+[synchronous](../../ws-strategy-sync.py) and
+[asynchronous](../../ws-strategy.py) examples combine reference discovery
 with price queries and orders.
 
 ## Recovery and updates
@@ -116,6 +115,11 @@ Repeat a GET request to refresh the data. An update replaces the record with
 the same key. Account reassignments can change the records visible to a token.
 Risk and marking limits remain separate for different symbol aggregations.
 Use identifiers rather than relying on array order.
+
+Titan's `/positions` records provide initial position seeds. The examples
+combine these seeds with replayed executions and keep updating positions
+from live execution reports; see
+[position recovery](ws-gateway.md#recovery-announcement).
 
 During startup, a successful response can contain only part of the initial
 data. Repeat requests until the definitions you need are available. If records

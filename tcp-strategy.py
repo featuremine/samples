@@ -65,6 +65,35 @@ def usable_quotes(fields):
     return quotes
 
 
+def remaining_time(deadline):
+    """Return the remaining phase budget or stop when it has expired."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError("Operation timed out")
+    return remaining
+
+
+def update_position(execution, positions, order_fills):
+    """Apply the change in an order's signed cumulative executed quantity."""
+    event = execution.data.which()
+    if event not in ("partiallyFilled", "filled", "correction", "bust", "status", "restated"):
+        return
+    try:
+        cumulative = float(getattr(execution.data, event).cumQty)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise RuntimeError("Invalid cumulative execution quantity") from error
+    if not math.isfinite(cumulative) or cumulative < 0:
+        raise RuntimeError("Invalid cumulative execution quantity")
+    side = str(execution.orderSide)
+    if side not in ("buy", "sell", "sellShort"):
+        raise RuntimeError("Invalid execution side")
+    signed = cumulative if side == "buy" else -cumulative
+    key = (execution.accountID, execution.securityId, execution.strgOrdID)
+    delta = signed - order_fills.get(key, 0)
+    positions[key[:2]] = positions.get(key[:2], 0) + delta
+    order_fills[key] = signed
+
+
 async def main(args):
     """Recover reference/prices, send one IOC batch, then await terminal replies."""
     version = (1, 0, 11)
@@ -72,20 +101,29 @@ async def main(args):
     reference = capnp.load(str(args.schemas / "reference.capnp"))
     if len(args.token) != 256 or not args.token.isascii():
         raise ValueError("Carnitas requires a 256-byte ASCII token")
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        raise ValueError("Timeout must be positive and finite")
     token = args.token.encode("ascii")
+    # Startup covers both connections, recovery, quote readiness and batch writes.
+    deadline = time.monotonic() + args.timeout
     connections = []
     try:
         # Use separate order and market connections. Use one execution venue:
         # Titan routes this token's orders to its first venue.
         for port in (args.port, args.market_port):
-            reader, writer = await asyncio.wait_for(asyncio.open_connection(args.host, port), args.timeout)
+            timeout = remaining_time(deadline)
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(args.host, port), timeout)
             connection = {"reader": reader, "writer": writer, "task": None,
                           "sequence": 0, "received": 0, "catchup": 0}
             connections.append(connection)
             # Recovery offset zero requests all history on this token's route.
+            remaining_time(deadline)
             writer.write(HANDSHAKE.pack(MAGIC, *version, 264) + token + struct.pack("<Q", 0))
-            await writer.drain()
-            hello = await asyncio.wait_for(reader.readexactly(32), args.timeout)
+            timeout = remaining_time(deadline)
+            await asyncio.wait_for(writer.drain(), timeout)
+            timeout = remaining_time(deadline)
+            hello = await asyncio.wait_for(reader.readexactly(32), timeout)
             magic, major, minor, patch, size = HANDSHAKE.unpack(hello[:16])
             # This sample requires an exact schema-version match on both services.
             if magic != MAGIC or (major, minor, patch) != version or size != 16:
@@ -94,29 +132,30 @@ async def main(args):
             connection["sequence"], connection["catchup"] = struct.unpack("<QQ", hello[16:])
         streams, securities, channels, prices = {}, {}, {}, {}
         accounts, mappings, attributes, positions = set(), set(), set(), {}
-        # Initial catch-up and price readiness have no overall deadline.
-        deadline = None
+        # Keep reference seeds separate from replayed and live execution deltas.
+        initial_positions, order_fills = {}, {}
         pending = set()
         orders_sent = False
         last_heartbeat = 0.0
         while True:
+            remaining_time(deadline)
             now = time.monotonic()
-            if deadline is not None and now >= deadline:
-                raise RuntimeError("Timed out waiting for order responses")
             # Keep both connections active during recovery and order-response waits.
             if now - last_heartbeat >= 10:
                 for connection in connections:
                     connection["sequence"] += 1
+                    remaining_time(deadline)
                     connection["writer"].write(frame(
                         TRANSPORT_HEARTBEAT, b"", connection["sequence"], time.time_ns()))
-                    await connection["writer"].drain()
+                    timeout = remaining_time(deadline)
+                    await asyncio.wait_for(connection["writer"].drain(), timeout)
                 last_heartbeat = now
             for connection in connections:
                 if connection["task"] is None:
                     connection["task"] = asyncio.create_task(read_frame(connection["reader"]))
             done, _ = await asyncio.wait(
                 {connection["task"] for connection in connections},
-                timeout=1 if deadline is None else min(1, deadline - now),
+                timeout=min(1, remaining_time(deadline)),
                 return_when=asyncio.FIRST_COMPLETED)
             if not done:
                 continue
@@ -155,8 +194,11 @@ async def main(args):
                 if value.which() == "account":
                     accounts.add(value.account.identifier)
                 elif value.which() == "position":
-                    # Retrieve positions as an example; order sizing does not use them.
-                    positions[value.position.accountId, value.position.securityId] = value.position.quantity
+                    # Reference updates replace the seed without erasing fill deltas.
+                    key = (value.position.accountId, value.position.securityId)
+                    new_seed = value.position.quantity
+                    positions[key] = positions.get(key, 0) + (new_seed - initial_positions.get(key, 0))
+                    initial_positions[key] = new_seed
             elif kind == FMTRON:
                 if stream not in streams:
                     raise RuntimeError("fmtron message precedes stream announcement")
@@ -167,24 +209,25 @@ async def main(args):
                 if decoder.tell() != len(payload) or len(values) % 2:
                     raise RuntimeError("Incomplete fmtron field/value update")
                 prices.setdefault(streams[stream], {}).update(zip(values[::2], values[1::2]))
-            elif kind == MANAGER_MESSAGE and orders_sent:
+            elif kind == MANAGER_MESSAGE:
                 message = strategy.ManagerMessage.from_bytes_packed(payload)
                 # This example ignores control replies, including ctrl.failed.
-                if message.message.which() != "sess":
-                    continue
-                session = message.message.sess
-                if session.which() in ("exec", "exec2"):
-                    execution = getattr(session, session.which())
-                    event = execution.data.which()
-                    print(f"Order update: {event}", flush=True)
-                    # Forwarding acknowledgements do not complete an order.
-                    if event in ("filled", "canceled", "rejected"):
-                        pending.discard(execution.strgOrdID)
-                elif session.which() == "failed":
-                    raise RuntimeError("Fill model rejected an order request")
-                if not pending:
-                    print("Done", flush=True)
-                    return
+                if message.message.which() == "sess":
+                    session = message.message.sess
+                    if session.which() in ("exec", "exec2"):
+                        execution = getattr(session, session.which())
+                        update_position(execution, positions, order_fills)
+                        if orders_sent:
+                            event = execution.data.which()
+                            print(f"Order update: {event}", flush=True)
+                            # Forwarding acknowledgements do not complete an order.
+                            if event in ("filled", "canceled", "rejected"):
+                                pending.discard(execution.strgOrdID)
+                    elif session.which() == "failed" and orders_sent:
+                        raise RuntimeError("Fill model rejected an order request")
+                    if orders_sent and not pending:
+                        print("Done", flush=True)
+                        return
             # Wait for both replays before selecting one batch from available mappings.
             if orders_sent or any(connection["received"] < connection["catchup"]
                                   for connection in connections):
@@ -202,10 +245,7 @@ async def main(args):
             if not combinations:
                 continue
             for account, security, venue, side, price, quantity in combinations:
-                # Fresh IDs identify this run's orders; earlier runs are not managed.
                 order_id = time.time_ns()
-                while order_id in pending:
-                    order_id += 1
                 # strategy.capnp defines the packed order request sent on the order socket.
                 message = strategy.ManagerMessage.new_message()
                 message.from_dict({
@@ -227,14 +267,18 @@ async def main(args):
                     }
                 })
                 connections[0]["sequence"] += 1
+                remaining_time(deadline)
                 connections[0]["writer"].write(frame(
                     MANAGER_MESSAGE, message.to_bytes_packed(), connections[0]["sequence"], time.time_ns()))
                 pending.add(order_id)
-            await connections[0]["writer"].drain()
+            timeout = remaining_time(deadline)
+            await asyncio.wait_for(connections[0]["writer"].drain(), timeout)
             orders_sent = True
             # --timeout bounds the response wait after the complete batch is written.
             deadline = time.monotonic() + args.timeout
             print(f"Placed {len(pending)} orders using live prices", flush=True)
+    except asyncio.TimeoutError as error:
+        raise RuntimeError("Operation timed out") from error
     finally:
         # Stop pending reader tasks before closing both sockets.
         tasks = [connection["task"] for connection in connections if connection["task"] is not None]
@@ -243,8 +287,14 @@ async def main(args):
         await asyncio.gather(*tasks, return_exceptions=True)
         for connection in connections:
             connection["writer"].close()
-        await asyncio.gather(*(connection["writer"].wait_closed() for connection in connections),
-                             return_exceptions=True)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(connection["writer"].wait_closed() for connection in connections),
+                               return_exceptions=True),
+                args.timeout)
+        except asyncio.TimeoutError:
+            for connection in connections:
+                connection["writer"].transport.abort()
 
 
 if __name__ == "__main__":
@@ -255,7 +305,8 @@ if __name__ == "__main__":
     parser.add_argument("--token", required=True, help="Order-entry token shown in Titan Profile configuration")
     parser.add_argument("--schemas", type=Path, default=Path(__file__).resolve().parent,
                         help="Schema directory (default: the directory containing this script)")
-    parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--timeout", type=float, default=30,
+                        help="Seconds allowed for startup and, separately, order responses (default: 30)")
     args = parser.parse_args()
     try:
         asyncio.run(main(args))

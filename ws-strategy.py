@@ -28,6 +28,35 @@ import capnp
 import websocket
 
 
+def remaining_time(deadline):
+    """Return the time left in the current startup or response phase."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError("Operation timed out")
+    return remaining
+
+
+def update_position(execution, positions, order_fills):
+    """Apply the change in an order's cumulative fill during replay or live use."""
+    event = execution.data.which()
+    if event not in ("partiallyFilled", "filled", "correction", "bust", "status", "restated"):
+        return
+    try:
+        quantity = float(getattr(execution.data, event).cumQty)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise RuntimeError("Invalid cumulative execution quantity") from error
+    if not math.isfinite(quantity) or quantity < 0:
+        raise RuntimeError("Invalid cumulative execution quantity")
+    side = str(execution.orderSide)
+    if side not in ("buy", "sell", "sellShort"):
+        raise RuntimeError("Invalid execution side")
+    signed = quantity if side == "buy" else -quantity
+    key = (execution.accountID, execution.securityId, execution.strgOrdID)
+    delta = signed - order_fills.get(key, 0)
+    positions[key[:2]] = positions.get(key[:2], 0) + delta
+    order_fills[key] = signed
+
+
 def request(args, port, path, data=None):
     """Fetch one REST resource, returning None while its snapshot is loading."""
     scheme = "https" if args.tls else "http"
@@ -37,8 +66,9 @@ def request(args, port, path, data=None):
     message = urllib.request.Request(
         f"{scheme}://{args.host}:{port}{path}", data=data, headers=headers)
     try:
-        # Pass --timeout to each REST request; discovery can repeat requests.
-        with urllib.request.urlopen(message, timeout=args.timeout) as response:
+        # Discovery requests share the startup deadline.
+        timeout = remaining_time(args.deadline)
+        with urllib.request.urlopen(message, timeout=timeout) as response:
             return response.read()
     except urllib.error.HTTPError as error:
         if error.code == 503:
@@ -96,9 +126,11 @@ def price_data(args, securities):
     return prices
 
 
-def receive(connection):
+def receive(connection, deadline=None):
     """Receive an application message while processing Ping/Pong frames."""
     while True:
+        if deadline is not None:
+            connection.settimeout(remaining_time(deadline))
         opcode, payload = connection.recv_data(control_frame=True)
         if opcode in (websocket.ABNF.OPCODE_PING, websocket.ABNF.OPCODE_PONG):
             continue
@@ -107,22 +139,28 @@ def receive(connection):
         return opcode, payload
 
 
-def recover(connection):
+def recover(connection, strategy, positions, order_fills, deadline):
     """Consume the announced historical replies before placing a new batch."""
-    opcode, payload = receive(connection)
+    opcode, payload = receive(connection, deadline)
     if opcode != websocket.ABNF.OPCODE_TEXT:
         raise RuntimeError("Missing WebSocket recovery information")
     snapshot = json.loads(payload)
     for field in ("received", "pending"):
         if type(snapshot.get(field)) is not int or snapshot[field] < 0:
             raise RuntimeError("Invalid WebSocket recovery information")
-    # Read all pending history without an overall replay deadline. Discard it;
-    # this example does not reconstruct outstanding orders from previous runs.
-    connection.settimeout(None)
+    # Recover cumulative execution quantities before submitting this run's batch.
     for _ in range(snapshot["pending"]):
-        opcode, _ = receive(connection)
+        opcode, payload = receive(connection, deadline)
         if opcode != websocket.ABNF.OPCODE_BINARY:
             raise RuntimeError("Invalid WebSocket recovery message")
+        message = strategy.ManagerMessage.from_bytes_packed(payload)
+        if message.message.which() == "sess":
+            session = message.message.sess
+            if session.which() in ("exec", "exec2"):
+                update_position(getattr(session, session.which()), positions, order_fills)
+    # The asynchronous phase deadlines bound the live receive without changing
+    # the socket timeout concurrently with batch sends.
+    connection.settimeout(None)
 
 
 def usable_quotes(fields):
@@ -146,10 +184,12 @@ async def main(args):
         raise ValueError("Titan requires a 256-byte ASCII token")
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         raise ValueError("Timeout must be positive and finite")
+    args.deadline = deadline = time.monotonic() + args.timeout
     connection = None
     reader = None
     responses = asyncio.Queue()
     orders_sent = False
+    positions, initial_positions, order_fills = {}, {}, {}
 
     async def read_responses():
         """Queue live replies concurrently, including replies during batch sends."""
@@ -158,34 +198,50 @@ async def main(args):
                 opcode, payload = await asyncio.to_thread(receive, connection)
                 if opcode != websocket.ABNF.OPCODE_BINARY:
                     raise RuntimeError("Unexpected WebSocket text message")
+                message = strategy.ManagerMessage.from_bytes_packed(payload)
+                if message.message.which() == "sess":
+                    session = message.message.sess
+                    if session.which() in ("exec", "exec2"):
+                        update_position(getattr(session, session.which()), positions, order_fills)
                 if orders_sent:
-                    responses.put_nowait(payload)
+                    responses.put_nowait(message)
         except Exception as error:
             responses.put_nowait(error)
 
     try:
         scheme = "wss" if args.tls else "ws"
-        # Apply --timeout to connection setup before reading the recovery history.
+        # Startup shares one deadline across connection, recovery and discovery.
+        # Keep the returned socket owned so cleanup can close a late connection.
         connection = await asyncio.to_thread(
             websocket.create_connection, f"{scheme}://{args.host}:{args.port}",
-            header={"Authorization": args.token}, timeout=args.timeout,
+            header={"Authorization": args.token}, timeout=remaining_time(deadline),
             enable_multithread=True)
-        await asyncio.to_thread(recover, connection)
+        timeout = remaining_time(deadline)
+        await asyncio.wait_for(asyncio.to_thread(
+            recover, connection, strategy, positions, order_fills, deadline),
+            timeout)
         reader = asyncio.create_task(read_responses())
         pending = set()
-        # Retry reference and price discovery without an overall readiness deadline.
+        # Retry reference and price discovery within the startup deadline.
         while not orders_sent:
+            remaining_time(deadline)
             if not responses.empty():
                 raise responses.get_nowait()
-            reference = await asyncio.to_thread(reference_data, args)
+            timeout = remaining_time(deadline)
+            reference = await asyncio.wait_for(asyncio.to_thread(reference_data, args), timeout)
             if reference is None:
                 continue
-            # Positions demonstrate reference retrieval; they do not size orders here.
-            securities, accounts, mappings, attributes, positions = reference
+            # Add initial reference positions once; executions remain cumulative.
+            # Recovered positions do not change this example's order sizing.
+            securities, accounts, mappings, attributes, seeds = reference
+            for key, quantity in seeds.items():
+                positions[key] = positions.get(key, 0) + (quantity - initial_positions.get(key, 0))
+            initial_positions.update(seeds)
             identifiers = {security for security, venue in attributes if security in securities}
             if not identifiers or not accounts:
                 continue
-            prices = await asyncio.to_thread(price_data, args, identifiers)
+            timeout = remaining_time(deadline)
+            prices = await asyncio.wait_for(asyncio.to_thread(price_data, args, identifiers), timeout)
             if prices is None:
                 continue
             # Choose one random usable side per mapped account/security/venue.
@@ -206,10 +262,8 @@ async def main(args):
             # Prepare packed IOC/DMA limit orders before sending the batch.
             messages = []
             for account, security, venue, side, price, quantity in combinations:
-                # Use fresh IDs for this run and avoid duplicates within the batch.
+                # Use nanosecond timestamps for this run's order identifiers.
                 order_id = time.time_ns()
-                while order_id in pending:
-                    order_id += 1
                 message = strategy.ManagerMessage.new_message()
                 message.from_dict({"message": {"strg": {"new": {
                     "strgOrdID": order_id, "accountID": account, "securityId": security,
@@ -223,21 +277,18 @@ async def main(args):
             # while the rest of the batch is still being written.
             orders_sent = True
             for payload in messages:
-                await asyncio.to_thread(connection.send, payload, websocket.ABNF.OPCODE_BINARY)
-            # --timeout bounds the terminal-response wait after the batch is sent.
-            deadline = time.monotonic() + args.timeout
+                timeout = remaining_time(deadline)
+                await asyncio.wait_for(asyncio.to_thread(
+                    connection.send, payload, websocket.ABNF.OPCODE_BINARY),
+                    timeout)
+            # Order responses receive a fresh deadline after the batch is sent.
+            args.deadline = deadline = time.monotonic() + args.timeout
             print(f"Placed {len(pending)} orders using live prices", flush=True)
         while pending:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise RuntimeError("Timed out waiting for order responses")
-            try:
-                payload = await asyncio.wait_for(responses.get(), remaining)
-            except asyncio.TimeoutError as error:
-                raise RuntimeError("Timed out waiting for order responses") from error
-            if isinstance(payload, Exception):
-                raise payload
-            message = strategy.ManagerMessage.from_bytes_packed(payload)
+            timeout = remaining_time(deadline)
+            message = await asyncio.wait_for(responses.get(), timeout)
+            if isinstance(message, Exception):
+                raise message
             # Ignore forwarding/control messages, including ctrl.failed.
             if message.message.which() != "sess":
                 continue
@@ -253,6 +304,8 @@ async def main(args):
                 # A session failure stops the whole run.
                 raise RuntimeError("Fill model rejected an order request")
         print("Done", flush=True)
+    except asyncio.TimeoutError as error:
+        raise RuntimeError("Operation timed out") from error
     finally:
         # Unblock a pending receive before canceling its asynchronous reader.
         if connection is not None:
@@ -273,7 +326,8 @@ if __name__ == "__main__":
     parser.add_argument("--token", required=True, help="Order-entry token shown in Titan Profile configuration")
     parser.add_argument("--schemas", type=Path, default=Path(__file__).resolve().parent,
                         help="Schema directory (default: the directory containing this script)")
-    parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--timeout", type=float, default=30,
+                        help="Seconds allowed for startup and, separately, order responses (default: 30)")
     parser.add_argument("--tls", action="store_true", help="Use WSS and HTTPS through a TLS endpoint")
     args = parser.parse_args()
     try:

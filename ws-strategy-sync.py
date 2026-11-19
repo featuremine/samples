@@ -16,7 +16,7 @@
 import json
 from itertools import groupby
 import random
-from time import time_ns
+from time import monotonic, time_ns
 from typing import Any, Dict, List, Set, Tuple
 
 import requests
@@ -25,6 +25,48 @@ import capnp # type: ignore[import-untyped]
 import math
 import argparse
 from pathlib import Path
+
+
+def remaining_time(deadline):
+    """Return the time left in the current startup or response phase."""
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise RuntimeError("Operation timed out")
+    return remaining
+
+
+def receive(connection, deadline):
+    """Receive an application message without letting Ping/Pong reset the deadline."""
+    while True:
+        connection.settimeout(remaining_time(deadline))
+        opcode, payload = connection.recv_data(control_frame=True)
+        if opcode in (ws.ABNF.OPCODE_PING, ws.ABNF.OPCODE_PONG):
+            continue
+        if opcode == ws.ABNF.OPCODE_CLOSE:
+            raise RuntimeError("WebSocket connection closed")
+        return opcode, payload
+
+
+def update_position(execution, positions, order_fills):
+    """Apply the change in an order's cumulative fill during replay or live use."""
+    event = execution.data.which()
+    if event not in ("partiallyFilled", "filled", "correction", "bust", "status", "restated"):
+        return
+    try:
+        quantity = float(getattr(execution.data, event).cumQty)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise RuntimeError("Invalid cumulative execution quantity") from error
+    if not math.isfinite(quantity) or quantity < 0:
+        raise RuntimeError("Invalid cumulative execution quantity")
+    side = str(execution.orderSide)
+    if side not in ("buy", "sell", "sellShort"):
+        raise RuntimeError("Invalid execution side")
+    signed = quantity if side == "buy" else -quantity
+    key = (execution.accountID, execution.securityId, execution.strgOrdID)
+    delta = signed - order_fills.get(key, 0)
+    positions[key[:2]] = positions.get(key[:2], 0) + delta
+    order_fills[key] = signed
+
 
 if __name__ == "__main__":
 
@@ -36,18 +78,23 @@ if __name__ == "__main__":
     parser.add_argument("--token", required=True, help="Order-entry token shown in Titan Profile configuration")
     parser.add_argument("--schemas", type=Path, default=Path(__file__).resolve().parent,
                         help="Schema directory (default: the directory containing this script)")
-    parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--timeout", type=float, default=30,
+                        help="Seconds allowed for startup and, separately, order responses (default: 30)")
     parser.add_argument("--tls", action="store_true", help="Use WSS and HTTPS through a TLS endpoint")
     args = parser.parse_args()
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        raise ValueError("Timeout must be positive and finite")
+    deadline = monotonic() + args.timeout
 
     # strategy.capnp defines the packed order and response messages.
     spec: Any = capnp.load(str(args.schemas / 'strategy.capnp'))
 
     # Retrieve token-visible accounts and venue/security mappings synchronously.
-    # These REST calls have no timeout or retries; --timeout is not applied.
+    # Each request uses the remaining startup time, rather than restarting it.
     scheme = "https" if args.tls else "http"
     response: requests.Response = requests.get(
-        f"{scheme}://{args.host}:{args.reference_port}/accounts", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/accounts", headers={"authorization": args.token},
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
     accounts: List[int] = [entry["message"]["account"]["identifier"] for entry in response.json()]
@@ -55,7 +102,8 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find account definitions. Please reach out to FM team.")
 
     response = requests.get(
-        f"{scheme}://{args.host}:{args.reference_port}/venues", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/venues", headers={"authorization": args.token},
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
     venues: List[int] = [entry["message"]["venue"]["identifier"] for entry in response.json()]
@@ -63,7 +111,8 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find venue definitions. Please reach out to FM team.")
 
     response = requests.get(
-        f"{scheme}://{args.host}:{args.reference_port}/securities", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/securities", headers={"authorization": args.token},
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
     securityDefinitions: Dict[int, Dict[str, Any]] = {
@@ -74,7 +123,8 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find security definitions. Please reach out to FM team.")
 
     response = requests.get(
-        f"{scheme}://{args.host}:{args.reference_port}/venueSecurityAttributes", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/venueSecurityAttributes", headers={"authorization": args.token},
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
     venueSecurityAttributes: Dict[int, List[int]] = {
@@ -91,7 +141,8 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find venueSecurityAttributes. Please reach out to FM team.")
 
     response = requests.get(
-        f"{scheme}://{args.host}:{args.reference_port}/venueAccountMappings", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/venueAccountMappings", headers={"authorization": args.token},
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
     venueAccountMappings: Dict[int, List[int]] = {
@@ -108,11 +159,19 @@ if __name__ == "__main__":
         raise RuntimeError("Unable to find venueAccountMappings. Please reach out to FM team.")
 
     response = requests.get(
-        f"{scheme}://{args.host}:{args.reference_port}/positions", headers={"authorization": args.token}
+        f"{scheme}://{args.host}:{args.reference_port}/positions", headers={"authorization": args.token},
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
-    # Retrieve positions as a reference-data example; they do not size orders.
-    positions: Dict[Tuple[int, int], int] = {(entry["message"]["position"]["accountId"], entry["message"]["position"]["securityId"]): entry["message"]["position"]["quantity"] for entry in response.json()}
+    # Reference positions are initial seeds; replay and live fills update them.
+    initial_positions = {
+        (int(entry["message"]["position"]["accountId"]),
+         int(entry["message"]["position"]["securityId"])):
+        int(entry["message"]["position"]["quantity"])
+        for entry in response.json()
+    }
+    positions = dict(initial_positions)
+    order_fills = {}
 
     supported: List[Tuple[int, int, int, str, float, float]] = []
 
@@ -120,7 +179,8 @@ if __name__ == "__main__":
     response = requests.get(
         f"{scheme}://{args.host}:{args.market_port}/api/prices",
         headers={"Content-Type": "text/plain; charset=us-ascii"},
-        data="22 25 730 735\n" + "\n".join(str(secid) for secid in venueSecurityAttributes.keys()) + "\n"
+        data="22 25 730 735\n" + "\n".join(str(secid) for secid in venueSecurityAttributes.keys()) + "\n",
+        timeout=remaining_time(deadline),
     )
     response.raise_for_status()
     prices: Dict[int, Dict[int, float]] = {}
@@ -160,20 +220,33 @@ if __name__ == "__main__":
     if not supported:
         raise RuntimeError("Unable to find valid combinations for order placement. Please reach out to FM team.")
 
-    # WebSocket calls use the fixed ten-second timeout rather than --timeout.
+    # Connection setup and recovery share the remaining startup time.
     scheme = "wss" if args.tls else "ws"
     wsc: ws.WebSocket = ws.create_connection(
         url=f"{scheme}://{args.host}:{args.port}",
         header={"authorization": args.token},
-        timeout=10.0,
+        timeout=remaining_time(deadline),
     )
 
     try:
         # Read the recovery announcement for the number of pending replies.
-        recovery: Dict[str, Any] = json.loads(wsc.recv())
-        # Drain historical replies; this run manages only its new orders.
+        opcode, payload = receive(wsc, deadline)
+        if opcode != ws.ABNF.OPCODE_TEXT:
+            raise RuntimeError("Missing WebSocket recovery information")
+        recovery: Dict[str, Any] = json.loads(payload)
+        for field in ("received", "pending"):
+            if type(recovery.get(field)) is not int or recovery[field] < 0:
+                raise RuntimeError("Invalid WebSocket recovery information")
+        # Recover positions without treating historical orders as this run's batch.
         for _ in range(recovery["pending"]):
-            wsc.recv()
+            opcode, payload = receive(wsc, deadline)
+            if opcode != ws.ABNF.OPCODE_BINARY:
+                raise RuntimeError("Invalid WebSocket recovery message")
+            msg = spec.ManagerMessage.from_bytes_packed(payload)
+            if msg.message.which() == "sess":
+                session = msg.message.sess
+                if session.which() in ("exec", "exec2"):
+                    update_position(getattr(session, session.which()), positions, order_fills)
 
         orders: List[bytes] = []
         pending: Set[int] = set()
@@ -182,8 +255,6 @@ if __name__ == "__main__":
         for account, venue, security, side, price, quantity in supported:
             msg = spec.ManagerMessage.new_message()
             strgordid: int = time_ns()
-            while strgordid in pending:
-                strgordid += 1
             msg.from_dict(
                 {
                     "message": {
@@ -209,18 +280,25 @@ if __name__ == "__main__":
 
         # Send the prepared orders as binary WebSocket messages.
         for order in orders:
+            wsc.settimeout(remaining_time(deadline))
             wsc.send(order, opcode=ws.ABNF.OPCODE_BINARY)
+        # Start a fresh response budget once the complete batch has been sent.
+        deadline = monotonic() + args.timeout
         print(f"Placed {len(pending)} orders using live prices", flush=True)
 
         # Forwarding alone does not complete an order; await terminal executions.
         while pending:
-            msg = spec.ManagerMessage.from_bytes_packed(wsc.recv())
+            opcode, payload = receive(wsc, deadline)
+            if opcode != ws.ABNF.OPCODE_BINARY:
+                raise RuntimeError("Unexpected WebSocket text message")
+            msg = spec.ManagerMessage.from_bytes_packed(payload)
             if msg.message.which() != "sess":
                 continue
             session = msg.message.sess
             if session.which() in ("exec", "exec2"):
                 execution = getattr(session, session.which())
                 event = execution.data.which()
+                update_position(execution, positions, order_fills)
                 print(f"Order update: {event}", flush=True)
                 if event in ("filled", "canceled", "rejected"):
                     pending.discard(execution.strgOrdID)

@@ -72,7 +72,7 @@ def update_prices(payload, fields):
     fields.update(zip(values[::2], values[1::2]))
 ```
 
-The asynchronous examples require a finite, positive price and quantity for
+All three examples require a finite, positive price and quantity for
 the chosen side. A buy uses ask fields 25 and 735; a sell uses bid fields 22
 and 730. They randomly choose among usable sides and use at most one unit.
 Reference data uses [reference.capnp](../../reference.capnp); order messages

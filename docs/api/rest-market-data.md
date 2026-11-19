@@ -3,8 +3,8 @@
 Use the REST market data feed to query the latest price fields for security
 identifiers obtained from the [REST reference data feed](rest-reference.md).
 For a local run, see [Getting started](../../README.md). The documented
-[asynchronous](../../ws-strategy.py) and
-[synchronous](../../ws-strategy-sync.py) examples use this feed.
+[synchronous](../../ws-strategy-sync.py) and
+[asynchronous](../../ws-strategy.py) examples use this feed.
 
 ## Connection and authentication
 
@@ -58,7 +58,7 @@ in request order:
 `<FIELD_ID> N/A` means that field is missing. A row containing only
 `<SECURITY_ID> N/A` means no mapped price stream is available for that security.
 
-The asynchronous examples require a finite, positive price and quantity for
+Both WebSocket examples require a finite, positive price and quantity for
 the chosen side. A buy uses ask fields 25 and 735; a sell uses bid fields 22
 and 730. They randomly choose among usable sides and submit at most one unit.
 Order fields are defined in [strategy.capnp](../../strategy.capnp).
@@ -85,9 +85,10 @@ def query_prices(host, port, security_ids, timeout=30, tls=False):
 ```
 
 The [asynchronous example](../../ws-strategy.py) also parses missing fields
-and retries startup responses. The synchronous example sends a GET request
-with an ASCII body; check support for that form when using it with another
-server.
+and retries startup responses within its
+[startup budget](../../README.md#connection-settings). The
+[synchronous example](../../ws-strategy-sync.py) sends a GET request with an
+ASCII body; check support for that form when using it with another server.
 
 ## Recovery and updates
 

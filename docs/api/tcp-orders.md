@@ -184,10 +184,9 @@ for prices and quantities represented as text. The order management system
 [strategy schema](../../strategy.capnp) and [common types](../../common.capnp)
 define the fields and variants.
 
-Use a distinct `strgOrdID` for each new order under the same client identity,
-across all connections. Retain it to match replies. The identifiers in `Place`
-are signed 64-bit integers. Supply a finite, positive quantity and a finite
-limit price.
+The examples set `strgOrdID` with `time.time_ns()`. Retain it to match replies.
+The identifiers in `Place` are signed 64-bit integers. Supply a finite,
+positive quantity and a finite limit price.
 
 ### Cancel and replace
 
@@ -239,10 +238,10 @@ def encode_ioc(account_id, security_id, venue_id, side, price, quoted_quantity):
     return order_id, message.to_bytes_packed()
 ```
 
-The asynchronous examples randomly choose among usable sides for each
-account/security/venue combination. They check for identifier collisions in
-their pending batch. They do not submit cancel or replace requests; see the
-[code](../../tcp-strategy.py) for selection and response handling.
+All three examples randomly choose among usable sides for each
+account/security/venue combination. They do not submit cancel or replace
+requests; see the [code](../../tcp-strategy.py) for selection and response
+handling.
 
 ## Responses
 
@@ -260,8 +259,9 @@ channels.
 
 `message.ctrl.placeForwarded`, `cancelForwarded`, and `replaceForwarded`
 acknowledge forwarding. Keep reading execution or rejection responses after
-these acknowledgements. Treat `message.ctrl.failed` and `message.sess.failed`
-as request failures; each carries the request identifier, type, and reason.
+these acknowledgements. `message.ctrl.failed` and `message.sess.failed` each
+carry the request identifier, type, and reason. The examples ignore
+`ctrl.failed`; `sess.failed` aborts the run.
 
 Execution events arrive in `message.sess.exec` or `message.sess.exec2`.
 Inspect the `data` union. `Exec` uses floating-point numeric fields; `Exec2`
@@ -280,13 +280,23 @@ announcements. Read the advertised catch-up records, then continue with live
 data. The Carnitas example requests full replay on both connections before
 choosing its new batch; historical order replies do not complete that batch.
 
+The example recovers positions from the initial reference position for each
+account/security pair plus each order's latest cumulative filled quantity,
+positive for buys and negative for sells. Each update applies only the change
+from that order's previous cumulative quantity. Repeated cumulative values
+do not add another fill. Replay and live handling cover partial fills, fills,
+corrections, busts, status, and restated events in numeric `Exec` and text
+`Exec2` reports. Position tracking does not change the quote-based IOC sizing.
+See [connection settings](../../README.md#connection-settings) for the
+separate startup and order-response budgets.
+
 A server data record's transport sequence is one plus the number of selected
 data records preceding it, modulo 2³². Announcement sequence and timestamp
 fields are zero. These numbers are separate from `ManagerMessage.seqnum` and
 order identifiers.
 
 The token selects the order route. Client header sequence, timestamp, and
-stream ID fields do not change that route or prevent duplicate requests.
+stream ID fields do not change that route.
 Retain application order identifiers separately.
 
 ## Heartbeat and close

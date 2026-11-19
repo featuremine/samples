@@ -6,8 +6,8 @@ prices through the [REST market data feed](rest-market-data.md). Order messages
 use the same Cap'n Proto schema as the [Carnitas gateway](tcp-orders.md).
 
 For a local run, see [Getting started](../../README.md). The documented
-[asynchronous](../../ws-strategy.py) and
-[synchronous](../../ws-strategy-sync.py) examples use this gateway.
+[synchronous](../../ws-strategy-sync.py) and
+[asynchronous](../../ws-strategy.py) examples use this gateway.
 
 ## Connection and authentication
 
@@ -143,11 +143,19 @@ The order management system (OMS) control/status channel is separate. Messages
 sent only on that channel are absent from WebSocket replies. Titan's main-session
 broadcast status is available through the Carnitas gateway.
 
-The [asynchronous example](../../ws-strategy.py) validates the announcement and
-discards all pending replies before submitting its new batch. Its code
-documents replay and timeout handling. The
-[synchronous example](../../ws-strategy-sync.py) instead uses historical fills
-when recovering positions.
+Both WebSocket examples validate the announcement and use replayed executions
+to recover positions before submitting their new batch. They start with the
+initial reference position for each account/security pair and add each
+order's latest cumulative filled quantity, positive for buys and negative
+for sells. Each update applies only the change from that order's previous
+cumulative quantity, so a repeated value does not add another fill.
+
+Replay and live handling cover partial fills, fills, corrections, busts,
+status, and restated events in numeric `Exec` and text `Exec2` reports.
+Position tracking does not change the examples' quote-based order sizing.
+Historical replies do not complete orders in the new batch. See
+[connection settings](../../README.md#connection-settings) for the separate
+startup and order-response budgets.
 
 ## Requests
 
@@ -172,8 +180,7 @@ for text prices and quantities. Support depends on the OMS or execution service.
 The encoder in the [Carnitas gateway guide](tcp-orders.md#example) constructs
 the same packed payload. Send the returned bytes as a binary WebSocket message.
 
-Use a distinct `strgOrdID` for each new order you submit under the same client
-identity, across all connections. Retain it to match replies.
+The examples set `strgOrdID` with `time.time_ns()`. Retain it to match replies.
 Cancel and replace requests use the existing order's identifier; see
 [cancel and replace](tcp-orders.md#cancel-and-replace) for the shared request fields.
 
@@ -181,9 +188,10 @@ Cancel and replace requests use the existing order's identifier; see
 
 Decode replies with `strategy.ManagerMessage.from_bytes_packed(payload)` and
 inspect the `message` union. A `ctrl.placeForwarded`, `cancelForwarded`, or
-`replaceForwarded` acknowledgement confirms forwarding. Treat `ctrl.failed`
-and `sess.failed` as request failures and read their identifier, type, and
-reason. Execution events arrive in `sess.exec` or `sess.exec2`; inspect their
+`replaceForwarded` acknowledgement confirms forwarding. `ctrl.failed` and
+`sess.failed` carry the request identifier, type, and reason. The examples
+ignore `ctrl.failed`; `sess.failed` aborts the run. Execution events arrive
+in `sess.exec` or `sess.exec2`; inspect their
 `data` union. `Exec` uses floating-point numeric fields, while `Exec2` represents
 prices and quantities as text. Use `strgOrdID` to correlate replies;
 `ManagerMessage.seqnum` is a separate sequence for each output channel.

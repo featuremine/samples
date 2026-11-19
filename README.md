@@ -2,10 +2,9 @@
 
 This repository contains sample strategies you can run with Featuremine's local
 development environment (Titan) or our hosted services. Start with Titan and use real
-Kraken market data and simulated trading venue on your computer.
+Kraken market data and a simulated trading venue on your computer.
 
-Request Titan access through the
-[local trading development environment page](https://www.featuremine.com/learn#titan).
+Request Titan access from Featuremine.
 
 ## Run a strategy
 
@@ -20,7 +19,8 @@ folder—the one containing `requirements.txt`.
 
 Install [Python 3.9 or later](https://www.python.org/downloads/); we recommend
 using a [virtual environment](https://docs.python.org/3/library/venv.html).
-From this folder, install the requirements:
+The `python` commands below assume an activated virtual environment.
+From the repository root, install the requirements:
 
 ```sh
 python -m pip install -r requirements.txt
@@ -49,6 +49,10 @@ size are finite and positive. Buys use the ask; sells use the bid.
 The limit price is the selected quote, and the quantity is the smaller of its
 available size and one unit. All examples use immediate-or-cancel (IOC)
 orders.
+
+The examples recover positions from initial reference positions and replayed
+execution reports, then update them as live execution reports arrive. This
+tracking does not change how they choose or size orders.
 
 Hover the **Default** profile name in the running workspace to view its
 connection details. In the popup, click **Copy order-entry token** for the
@@ -128,18 +132,20 @@ not model order-book depth or queue position. For further changes, see the
 
 ## Strategies
 
-The *ws-strategy.py* strategy uses our REST based API for reference and market data and websocket based API for order entry. These APIs are best for rapid prototyping and quickly deploying your strategies to market.
-We also have low latency APIs that suit a stategy that require higher performance. You can refer to *tcp-strategy.py*
-for the example of their usage.
+The *ws-strategy-sync.py* and *ws-strategy.py* strategies use our REST API for
+reference and market data and WebSocket API for order entry. These APIs are
+best for rapid prototyping and quickly deploying your strategies to market.
+We also have low latency APIs that suit strategies that require higher
+performance. You can refer to *tcp-strategy.py* for an example of their usage.
 
-The following table lists examples, how to run them and underlying technologies used. Each file documents individual strategy's behavior and command-line options; use `--help` to view them.
-
-
+The following table lists the examples, their run commands, and the services
+they use. Each script documents its behavior and command-line options; use
+`--help` to view them.
 
 | Strategy | Orders | Reference data | Market data | Command |
 | --- | --- | --- | --- | --- |
-| [Asynchronous WebSocket](ws-strategy.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy.py --token "<TOKEN>"` |
 | [Synchronous WebSocket](ws-strategy-sync.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy-sync.py --token "<TOKEN>"` |
+| [Asynchronous WebSocket](ws-strategy.py) | [WebSocket](docs/api/ws-gateway.md) | [REST](docs/api/rest-reference.md) | [REST](docs/api/rest-market-data.md) | `python ws-strategy.py --token "<TOKEN>"` |
 | [Carnitas](tcp-strategy.py) | [Carnitas](docs/api/tcp-orders.md) | [Carnitas](docs/api/tcp-orders.md#reference-data) | [Carnitas](docs/api/tcp-market-data.md) | `python tcp-strategy.py --token "<TOKEN>"` |
 
 ## Services
@@ -156,7 +162,8 @@ describes the requests and responses, with examples.
 | [Carnitas market data feed](docs/api/tcp-market-data.md) | 8033 | Receive streamed price updates |
 
 We use Cap'n Proto schemas for [orders](strategy.capnp) and
-[reference data](reference.capnp). Each service guide documents their usage with example.
+[reference data](reference.capnp). The service guides include examples using
+these schemas.
 
 ## Connection settings
 
@@ -172,6 +179,12 @@ connection details provided by Featuremine.
 | `--reference-port` | REST reference-data port for WebSocket examples |
 | `--tls` | Use WSS/HTTPS in WebSocket examples when the supplied endpoint provides TLS; unavailable in the Carnitas example |
 | `--schemas` | Directory containing compatible schemas; defaults to the script's directory |
+| `--timeout` | Startup and order-response budgets in seconds; positive and finite, 30 by default |
+
+The startup budget runs from connection setup through discovery, recovery,
+and sending the complete batch. A fresh budget then bounds the wait for
+terminal order responses. Intermediate messages and retries do not reset
+either deadline.
 
 ## License
 
