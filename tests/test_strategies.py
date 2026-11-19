@@ -55,9 +55,9 @@ def packed(schema, fields):
 
 
 def execution(order, event="filled", sequence=1):
-    data = {"filled": {"lastQuantity": order["quantity"], "lastPrice": 100,
-                       "cumQty": order["quantity"], "leaves": 0}}
-    if event != "filled":
+    data = {event: {"lastQuantity": order["quantity"], "lastPrice": 100,
+                    "cumQty": order["quantity"], "leaves": 0}}
+    if event not in ("filled", "partiallyFilled"):
         data = {event: {"reason": "synthetic rejection"}}
     return packed(strategy.ManagerMessage, {"seqnum": sequence, "message": {"sess": {"exec": {
         "strgOrdID": order["strgOrdID"], "accountID": order["accountID"],
@@ -239,11 +239,12 @@ class WebSocketStrategyTests(unittest.TestCase):
         self.assertEqual([order["orderType"]["limit"] for order in connection.orders], [100, 99])
         self.assertEqual([order["quantity"] for order in connection.orders], [0.4, 1])
         self.assertEqual(len({order["strgOrdID"] for order in connection.orders}), 2)
+        self.assertTrue(all(order["timeInForce"] == "ioc" for order in connection.orders))
         self.assertIn("Done", output.getvalue())
 
 
 class SynchronousStrategyTests(unittest.TestCase):
-    def exercise(self, targets=(3, -3), prices="1 22 99 25 100\n2 22 50\n3 N/A\n"):
+    def exercise(self, prices="1 22 99 25 100 730 4 735 0.4\n2 22 50 730 4\n3 N/A\n"):
         fixture = records()
         sent = []
         history = execution({"strgOrdID": 99, "accountID": 1, "securityId": 1,
@@ -258,13 +259,16 @@ class SynchronousStrategyTests(unittest.TestCase):
             def raise_for_status(self):
                 pass
         def get(url, **kwargs):
+            if url.endswith("/api/prices"):
+                self.assertTrue(kwargs["data"].startswith("22 25 730 735\n"))
             return Response(prices if url.endswith("/api/prices") else fixture[url.rsplit("/", 1)[1]])
         def send(payload, opcode):
             order = strategy.ManagerMessage.from_bytes_packed(payload).message.strg.new.to_dict()
             sent.append(order)
-            event = "placeForwarded" if len(sent) == 1 else "failed"
             incoming.append(packed(strategy.ManagerMessage, {"message": {"ctrl": {
-                event: {"strgOrdID": order["strgOrdID"]}}}}))
+                "placeForwarded": {"strgOrdID": order["strgOrdID"]}}}}))
+            incoming.append(execution(order, "partiallyFilled"))
+            incoming.append(execution(order, "filled" if len(sent) == 1 else "canceled"))
         connection = SimpleNamespace(recv=lambda: incoming.pop(0), send=send, close=lambda: None)
         requests = ModuleType("requests")
         requests.Response = Response
@@ -273,27 +277,38 @@ class SynchronousStrategyTests(unittest.TestCase):
                 patch.object(sys, "argv", ["ws-strategy-sync.py", "--token", "t" * 256]), \
                 patch.object(websocket, "create_connection", return_value=connection), \
                 patch.object(random, "choice", side_effect=lambda values: values[0]), \
-                patch.object(random, "sample", side_effect=lambda values, count: values), \
-                patch.object(random, "randint", side_effect=[2, *targets]), \
                 patch("time.time_ns", side_effect=[100, 101]), redirect_stdout(io.StringIO()) as output:
             runpy.run_path(str(ROOT / "ws-strategy-sync.py"), run_name="__main__")
+        self.assertEqual(incoming, [])
         return sent, output.getvalue()
 
-    def test_price_filter_recovery_sizing_and_forwarding_completion(self):
+    def test_quotes_ignore_position_sizing_and_wait_for_terminal_responses(self):
         orders, output = self.exercise()
         self.assertEqual([order["securityId"] for order in orders], [1, 2])
         self.assertEqual([order["orderSide"] for order in orders], ["buy", "sell"])
-        self.assertEqual([order["quantity"] for order in orders], [2, 2])
-        self.assertTrue(all(order["timeInForce"] == "day"
-                            and order["orderType"]["limit"] == 10 for order in orders))
-        self.assertIn("PlaceForwarded: 1", output)
-        self.assertIn("Failed: 1", output)
+        self.assertEqual([order["quantity"] for order in orders], [0.4, 1])
+        self.assertEqual([order["orderType"]["limit"] for order in orders], [100, 50])
+        self.assertTrue(all(order["timeInForce"] == "ioc" for order in orders))
+        self.assertIn("Placed 2 orders using live prices", output)
+        self.assertIn("Order update: partiallyFilled", output)
+        self.assertIn("Order update: filled", output)
+        self.assertIn("Order update: canceled", output)
         self.assertIn("Done", output)
 
-    def test_already_reached_targets_send_no_orders(self):
-        orders, output = self.exercise(targets=(1, -1))
-        self.assertEqual(orders, [])
-        self.assertIn("Done", output)
+    def test_invalid_sides_preserve_the_other_executable_side(self):
+        for bad in ("N/A", "nan", "inf", "0", "-1"):
+            for prices in (f"1 22 99 730 0.5 25 {bad} 735 1\n",
+                           f"1 22 99 730 0.5 25 100 735 {bad}\n"):
+                with self.subTest(prices=prices):
+                    orders, _ = self.exercise(prices=prices)
+                    self.assertEqual(len(orders), 1)
+                    self.assertEqual(orders[0]["orderSide"], "sell")
+                    self.assertEqual(orders[0]["orderType"]["limit"], 99)
+                    self.assertEqual(orders[0]["quantity"], 0.5)
+
+    def test_missing_sizes_do_not_produce_orders(self):
+        with self.assertRaisesRegex(RuntimeError, "Unable to find valid combinations"):
+            self.exercise(prices="1 22 99 25 100\n2 N/A\n3 N/A\n")
 
 
 if __name__ == "__main__":

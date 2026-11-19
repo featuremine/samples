@@ -11,13 +11,13 @@
 #
 # See LICENSE-RESTRICTED for the complete license terms.
 
-"""Synchronous WebSocket/REST example targeting random account positions."""
+"""Synchronous WebSocket/REST example placing IOC orders from live quotes."""
 
 import json
 from itertools import groupby
 import random
 from time import time_ns
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import requests
 import websocket as ws
@@ -111,70 +111,54 @@ if __name__ == "__main__":
         f"{scheme}://{args.host}:{args.reference_port}/positions", headers={"authorization": args.token}
     )
     response.raise_for_status()
+    # Retrieve positions as a reference-data example; they do not size orders.
     positions: Dict[Tuple[int, int], int] = {(entry["message"]["position"]["accountId"], entry["message"]["position"]["securityId"]): entry["message"]["position"]["quantity"] for entry in response.json()}
 
-    supported: List[Tuple[int, int, int]] = []
-    found: Set[int] = set()
+    supported: List[Tuple[int, int, int, str, float, float]] = []
 
-    # This example sends GET with a body; returned quotes gate eligibility,
-    # while order prices remain fixed at 10 rather than using bid/ask values.
+    # Read the same bid/ask prices and quantities as the other examples.
     response = requests.get(
         f"{scheme}://{args.host}:{args.market_port}/api/prices",
         headers={"Content-Type": "text/plain; charset=us-ascii"},
-        data="22 25\n" + "\n".join(str(secid) for secid in venueSecurityAttributes.keys()) + "\n"
+        data="22 25 730 735\n" + "\n".join(str(secid) for secid in venueSecurityAttributes.keys()) + "\n"
     )
     response.raise_for_status()
-    prices: Set[int] = set()
-    for entry in response.text.split("\n"):
-        secid, *rest = entry.split(" ")
-        valid = False
-        if rest:
-            while len(rest) >= 2:
-                pxid = rest.pop(0)
-                pxval = rest.pop(0)
-                if pxid == "22":
-                    try:
-                        px = float(pxval)
-                        if not math.isnan(px):
-                            valid = True
-                    except ValueError:
-                        pass
-                elif pxid == "25":
-                    try:
-                        px = float(pxval)
-                        if not math.isnan(px):
-                            valid = True
-                    except ValueError:
-                        pass
-        if valid:
-            prices.add(int(secid))
+    prices: Dict[int, Dict[int, float]] = {}
+    for entry in response.text.splitlines():
+        values = entry.split()
+        if not values or values[1:] == ["N/A"]:
+            continue
+        if len(values) % 2 != 1:
+            raise RuntimeError("Incomplete REST field/value response")
+        fields = prices.setdefault(int(values[0]), {})
+        for index in range(1, len(values), 2):
+            if values[index + 1] != "N/A":
+                fields[int(values[index])] = float(values[index + 1])
 
-    # Choose one venue and account for each security with an available quote.
+    # Choose a random usable side for each mapped account/security/venue.
     # Use one execution venue: Titan routes this token to its first venue.
-    for security, securityVenues in venueSecurityAttributes.items():
-        if security not in prices:
+    for security, securityVenues in sorted(venueSecurityAttributes.items()):
+        if security not in securityDefinitions:
             continue
-        venue: int = random.choice(securityVenues)
-        venueAccounts: List[int] = venueAccountMappings.get(venue, [])
-        if not venueAccounts:
+        fields = prices.get(security, {})
+        quotes = []
+        # Buys use ask price/quantity (25/735); sells use bid (22/730).
+        for side, price_field, quantity_field in (("buy", 25, 735), ("sell", 22, 730)):
+            price = fields.get(price_field)
+            quantity = fields.get(quantity_field, 0)
+            if (isinstance(price, (int, float)) and math.isfinite(price) and price > 0
+                    and isinstance(quantity, (int, float)) and math.isfinite(quantity) and quantity > 0):
+                quotes.append((side, price, min(quantity, 1.0)))
+        if not quotes:
             continue
-        account: int = random.choice(venueAccounts)
-        supported.append((account, venue, security))
-        found.add(security)
+        for venue in sorted(securityVenues):
+            for account in sorted(venueAccountMappings.get(venue, [])):
+                if account in accounts:
+                    side, price, quantity = random.choice(quotes)
+                    supported.append((account, venue, security, side, price, quantity))
 
     if not supported:
         raise RuntimeError("Unable to find valid combinations for order placement. Please reach out to FM team.")
-
-    # Use one to 1,000 random combinations, bounded by the available mappings.
-    chosen: List[Tuple[int, int, int]] = random.sample(supported, random.randint(1, min(1000, len(supported))))
-
-    # Targets range from -999 to 1001 inclusive. A target may already equal the
-    # recovered position, producing no order; sizing rounds target minus current.
-    desired: Dict[Tuple[int, int], Tuple[int, int]] = {
-        (account, security): ((1 + random.randint(-1000, 1000)), venue)
-        for account, venue, security in chosen
-    }
-    filled: Dict[Tuple[int, int], float] = {}
 
     # WebSocket calls use the fixed ten-second timeout rather than --timeout.
     scheme = "wss" if args.tls else "ws"
@@ -185,55 +169,21 @@ if __name__ == "__main__":
     )
 
     try:
-        # Read the recovery announcement before decoding its pending history.
+        # Read the recovery announcement for the number of pending replies.
         recovery: Dict[str, Any] = json.loads(wsc.recv())
-        print(f"Recovering {recovery['pending']} messages")
-
-        # Signed historical exec fills supplement the REST position snapshot.
-        # This example does not include exec2 fills in position recovery.
+        # Drain historical replies; this run manages only its new orders.
         for _ in range(recovery["pending"]):
-            msg: Any = spec.ManagerMessage.from_bytes_packed(wsc.recv())
-            accountPosition: Any = None
-            accountID: Optional[int] = None
-            msgtype: str = msg.message.which()
-            if msgtype == "sess" and msg.message.sess.which() == "exec":
-                execmsg: Any = msg.message.sess.exec
-                if not execmsg.accountID in accounts:
-                    continue
-                accountID = execmsg.accountID
-                if not execmsg.securityId in found:
-                    continue
-                accountPosition = execmsg.accountPosition
-                filltype: str = execmsg.data.which()
-                if filltype in ("filled", "partiallyFilled"):
-                    fill: Any = getattr(execmsg.data, filltype)
-                    sign: int = 1 if execmsg.orderSide == "buy" else -1
-                    key = (execmsg.accountID, execmsg.securityId)
-                    filled[key] = filled.get(key, 0) + (sign * fill.lastQuantity)
-            elif msgtype == "ctrl" and msg.message.ctrl.which() == "placeForwarded":
-                placemsg: Any = msg.message.ctrl.placeForwarded
-                if not placemsg.accountID in accounts:
-                    continue
-                accountID = placemsg.accountID
-                accountPosition = placemsg.accountPosition
+            wsc.recv()
 
-        orders: List[Tuple[bytes, float, float, int, int]] = []
-        responses: Dict[str, Set[int]] = {
-            "pending": set(),
-            "failed": set(),
-            "placeForwarded": set(),
-        }
+        orders: List[bytes] = []
+        pending: Set[int] = set()
 
-        # Combine the REST position snapshot with replayed fills before sizing.
-        for key, val in desired.items():
-            account, security = key
-            target, venue = val
-            current: float = positions.get(key, 0) + filled.get(key, 0)
-            quantity: float = round(target - current)
-            if quantity == 0:
-                continue
+        # Prepare the same IOC/DMA limit orders as the asynchronous examples.
+        for account, venue, security, side, price, quantity in supported:
             msg = spec.ManagerMessage.new_message()
             strgordid: int = time_ns()
+            while strgordid in pending:
+                strgordid += 1
             msg.from_dict(
                 {
                     "message": {
@@ -243,62 +193,40 @@ if __name__ == "__main__":
                                 "accountID": account,
                                 "securityId": security,
                                 "venueID": venue,
-                                "orderSide": "buy" if quantity > 0 else "sell",
-                                # This example deliberately uses a fixed DAY limit.
-                                "orderType": {"limit": 10},
-                                "quantity": abs(quantity),
+                                "orderSide": side,
+                                "orderType": {"limit": price},
+                                "quantity": quantity,
                                 "maxFloor": {"none": None},
-                                "timeInForce": "day",
+                                "timeInForce": "ioc",
                                 "algorithm": {"dma": None},
                             }
                         }
                     }
                 }
             )
-            orders.append((msg.to_bytes_packed(), quantity, current, target, security))
-            responses["pending"].add(strgordid)
+            orders.append(msg.to_bytes_packed())
+            pending.add(strgordid)
 
         # Send the prepared orders as binary WebSocket messages.
-        for order, quantity, current, target, security in orders:
+        for order in orders:
             wsc.send(order, opcode=ws.ABNF.OPCODE_BINARY)
-            secdef: Dict[str, Any] = securityDefinitions[security]
-            symbology: str = ""
-            if "equity" in secdef["assetClass"]:
-                if 'isin' in secdef['assetClass']['equity']:
-                    symbology += f" isin={secdef['assetClass']['equity']['isin']}"
-                if 'sedol' in secdef['assetClass']['equity']:
-                    symbology += f" sedol={secdef['assetClass']['equity']['sedol']}"
-            if "bloombergId" in secdef:
-                symbology += f" bloombergId={secdef['bloombergId']}"
-            if "compositeFigi" in secdef:
-                symbology += f" compositeFigi={secdef['compositeFigi']}"
-            if symbology:
-                symbology = f" ({symbology[1:]})"
-            print(
-                f"Placing {'buy' if quantity > 0 else 'sell'} {abs(quantity)} pos {current} target {target} for security {security}" + symbology
-            )
+        print(f"Placed {len(pending)} orders using live prices", flush=True)
 
-        # Done means ctrl.placeForwarded or ctrl.failed (before forwarding).
-        # Execution replies do not determine completion; DAY orders may remain.
-        while len(responses["pending"]) > 0:
+        # Forwarding alone does not complete an order; await terminal executions.
+        while pending:
             msg = spec.ManagerMessage.from_bytes_packed(wsc.recv())
-            msgtype = msg.message.which()
-            if msgtype != "ctrl":
+            if msg.message.which() != "sess":
                 continue
-            ctrltype: str = msg.message.ctrl.which()
-            if not ctrltype in ("placeForwarded", "failed"):
-                continue
-            strgordid = getattr(msg.message.ctrl, ctrltype).strgOrdID
-            if not strgordid in responses["pending"]:
-                continue
-            responses["pending"].remove(strgordid)
-            responses[ctrltype].add(strgordid)
-
-        print("Order state:")
-        print("Pending:", len(responses["pending"]))
-        print("PlaceForwarded:", len(responses["placeForwarded"]))
-        print("Failed:", len(responses["failed"]))
-        print("Done")
+            session = msg.message.sess
+            if session.which() in ("exec", "exec2"):
+                execution = getattr(session, session.which())
+                event = execution.data.which()
+                print(f"Order update: {event}", flush=True)
+                if event in ("filled", "canceled", "rejected"):
+                    pending.discard(execution.strgOrdID)
+            elif session.which() == "failed":
+                raise RuntimeError("Fill model rejected an order request")
+        print("Done", flush=True)
 
     finally:
         wsc.close()

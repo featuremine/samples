@@ -191,12 +191,12 @@ prices and quantities as text. Use `strgOrdID` to correlate replies;
 Continue receiving execution and rejection responses after a forwarding
 acknowledgement; the acknowledgement alone does not complete an order.
 
-The asynchronous example randomly chooses usable buy or sell sides and sends
+Both WebSocket examples randomly choose usable buy or sell sides and send
 immediate-or-cancel (IOC), direct market access (DMA) orders of at most one
-unit. It retains replies during sends and finishes when every order receives
-`filled`, `canceled`, or `rejected`. Its code documents application failure
-handling. The synchronous example finishes on forwarding acknowledgements or
-forwarding failures instead; execution responses can arrive after it exits.
+unit. Buys use the ask price and quantity; sells use the bid price and quantity.
+The asynchronous example collects replies during sends; the synchronous example
+reads them after sending its batch. Both finish when every submitted order
+receives `filled`, `canceled`, or `rejected`.
 
 ## Ping/Pong and close
 
