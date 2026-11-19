@@ -265,12 +265,24 @@ async def main(args):
                 # Use nanosecond timestamps for this run's order identifiers.
                 order_id = time.time_ns()
                 message = strategy.ManagerMessage.new_message()
-                message.from_dict({"message": {"strg": {"new": {
-                    "strgOrdID": order_id, "accountID": account, "securityId": security,
-                    "venueID": venue, "orderSide": side, "orderType": {"limit": price},
-                    "quantity": quantity, "maxFloor": {"none": None},
-                    "timeInForce": "ioc", "algorithm": {"dma": None},
-                }}}})
+                message.from_dict({
+                    "message": {
+                        "strg": {
+                            "new": {
+                                "strgOrdID": order_id,
+                                "accountID": account,
+                                "securityId": security,
+                                "venueID": venue,
+                                "orderSide": side,
+                                "orderType": {"limit": price},
+                                "quantity": quantity,
+                                "maxFloor": {"none": None},
+                                "timeInForce": "ioc",
+                                "algorithm": {"dma": None},
+                            }
+                        }
+                    }
+                })
                 pending.add(order_id)
                 messages.append(message.to_bytes_packed())
             # Queue replies before sending any request: a local fill may arrive
