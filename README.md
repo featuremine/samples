@@ -28,33 +28,14 @@ Install Titan using the instructions provided with your access.
 
 ### Start Titan
 
-If the **Default** session is already running, leave it open and continue with
-[Run the sample](#run-the-sample).
+Start up your titan application, once it has opened, you will be able to see the **Sessions** screen in which you can select the **Default** session and click **Start**. Wait for all timeout indicators to show up as green before running the sample.
 
-Otherwise, open Titan. In **Sessions**, select **Default** and click **Start**.
-On a new installation, it includes XBT/USD, XBT/EUR, ETH/USD, and ETH/EUR, one
-client with one account, and one venue with simulated execution.
-
-On its first start, the session loads initial position prices before opening
-the trading workspace. Wait for live market data before running the sample.
+On a new installation, the **Default** session includes four preconfigured securities (XBT/USD, XBT/EUR, ETH/USD and ETH/EUR), one client with one account, and one simulated execution venue.
 
 ### Run the sample
 
-All three examples submit one order for each eligible account/security/venue
-combination. Each randomly chooses a buy or sell side whose quote price and
-size are finite and positive. Buys use the ask; sells use the bid.
-
-The limit price is the selected quote, and the quantity is the smaller of its
-available size and one unit. All examples use immediate-or-cancel (IOC)
-orders.
-
-The examples recover positions from initial reference positions and replayed
-execution reports, then update them as live execution reports arrive. This
-tracking does not change how they choose or size orders.
-
-Hover the **Default** profile name in the running workspace to view its
-connection details. In the popup, click **Copy order-entry token** for the
-default client.
+Hover your mouse over the **Default** profile name in the running workspace to find its
+connection details. In the popup, click **Copy order-entry token** for the default client which you will need to run your strategy.
 
 Run the synchronous WebSocket sample from the repository root. Replace
 `<TOKEN>` with the complete token you copied:
@@ -62,6 +43,10 @@ Run the synchronous WebSocket sample from the repository root. Replace
 ```sh
 python ws-strategy-sync.py --token "<TOKEN>"
 ```
+
+The example submits one immediate-or-cancel (IOC) order for each eligible account/security/venue combination. A side is randomly chosen after ensuring the quote price and size are finite and positive. Buys use the ask; sells use the bid.
+
+The orders are sent after recovering positions by using the position obtained from the reference data and the replayed execution reports. In the example, position tracking does not change how the side or size of the order is chosen.
 
 ### Check the result
 
