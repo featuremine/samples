@@ -75,8 +75,9 @@ forwarded does not complete an order.
 ## Modify a sample
 
 Copy `ws-strategy-sync.py` to `my-strategy.py` in the repository root, keeping
-its license header. The copy will load the same bundled schemas. Make both
-changes below in the copy, leaving the original script unchanged.
+its license header. The copy will load the same bundled schemas.
+
+Make the following changes in the copy, leaving the original script unchanged.
 
 Change `timeInForce` from `ioc` to `day`:
 
@@ -90,10 +91,7 @@ Change the limit price to move it away from the selected quote:
 "orderType": {"limit": price * (0.99 if side == "buy" else 1.01)},
 ```
 
-Titan cancels marketable DAY orders, so changing only the time-in-force does
-not demonstrate a resting order. The adjusted buy limit is below the selected
-ask; the adjusted sell limit is above the selected bid. The order can rest if
-its limit does not cross the market when Titan processes it.
+Since the order can rest when its limit price does not cross the market once it is placed, you will now be able to see how your order gradually filled once the market moves towards the order.
 
 Keep the other fields unchanged. With Titan still running, use the same
 order-entry token:
@@ -103,15 +101,12 @@ python my-strategy.py --token "<TOKEN>"
 ```
 
 Under **Orders/Manager**, compare the working DAY orders with the IOC
-execution responses from the first run. The script waits for working orders
-to finish, so it may keep running until they terminate or the response wait
-times out. Stopping it with **Ctrl+C** disconnects without canceling working
-orders, including those from earlier runs.
+execution responses from the first run. The script will output placement acknowledgements for the orders placed and time out if the orders are not done before the script timeout.
 
-The simulator uses the best bid or ask and available quoted quantity; it does
-not model order-book depth or queue position. For further changes, see the
-[order schema](strategy.capnp) and
-[WebSocket gateway guide](docs/api/ws-gateway.md).
+You will be able to find the incoming fills and updates relevant to your order by using the **Orders/Manager** tab.
+
+Once you are ready to make additional changes, please refer to the
+[order schema](strategy.capnp) and [WebSocket gateway guide](docs/api/ws-gateway.md) for additional reference regarding the content of the messages you can send to Featuremine and how send them.
 
 ## Strategies
 
