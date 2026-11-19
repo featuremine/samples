@@ -24,7 +24,7 @@ import capnp
 
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("titan_test", ROOT / "titan-test.py")
+spec = importlib.util.spec_from_file_location("titan_test", ROOT / "tests" / "titan-test.py")
 tester = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tester)
 schema = capnp.load(str(ROOT / "strategy.capnp"))
@@ -129,7 +129,7 @@ class GeneratorTests(unittest.TestCase):
         with patch.object(tester.time, "monotonic", side_effect=[10, 12, 14, 16, 20]), \
                 patch.object(tester.ws.urllib.request, "urlopen") as request:
             request.return_value.__enter__.return_value.read.return_value = b"[]"
-            with self.assertRaisesRegex(tester.TestFailure, "deadline expired"):
+            with self.assertRaisesRegex(RuntimeError, "Operation timed out"):
                 tester.ws.reference_data(settings)
         self.assertEqual([call.kwargs["timeout"] for call in request.call_args_list], [10, 8, 6, 4])
 

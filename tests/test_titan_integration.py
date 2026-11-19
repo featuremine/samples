@@ -45,7 +45,7 @@ class TitanIntegrationTests(unittest.TestCase):
                 for transport in ("tcp", "websocket"):
                     with self.subTest(transport=transport):
                         result = subprocess.run(
-                            [sys.executable, "-B", str(ROOT / "titan-test.py"),
+                            [sys.executable, "-B", str(ROOT / "tests" / "titan-test.py"),
                              "--fixture", str(fixture_file), "--transport", transport,
                              "--seed", "7", "--orders", "24", "--timeout", "20", "--verbose"],
                             cwd=ROOT, capture_output=True, text=True, timeout=25)

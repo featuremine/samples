@@ -1,16 +1,14 @@
 # Getting started
 
-This repository contains sample strategies you can run with Featuremine's local
-development environment (Titan) or our hosted services. Start with Titan and use real
-Kraken market data and a simulated trading venue on your computer.
+This repository contains sample strategies you can run with Titan, Featuremine's local development environment, and our hosted services.
 
-Request Titan access from Featuremine.
+Start with Titan which provides access to real Kraken market data and a simulated trading venue on your computer.
+
+You can request the latest Titan package from the Featuremine team at [www.featuremine.com](https://www.featuremine.com).
 
 ## Run a strategy
 
-These sample strategies may be used and modified only for use with local
-Featuremine Titan or Featuremine-owned hosted services, under the
-[proprietary license](LICENSE-RESTRICTED).
+The sample strategies in this repository may be used and modified only for use with local Featuremine Titan or Featuremine-owned hosted services, under the [proprietary license](LICENSE-RESTRICTED).
 
 ### Prepare the sample
 

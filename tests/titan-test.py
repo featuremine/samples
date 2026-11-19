@@ -33,9 +33,9 @@ import websocket
 
 
 def load_sample(filename):
-    """Import a sibling sample without executing its command-line entry point."""
+    """Import a sample from the repository root without running its entry point."""
     spec = importlib.util.spec_from_file_location(filename.replace("-", "_"),
-                                                  Path(__file__).with_name(filename))
+                                                  Path(__file__).resolve().parents[1] / filename)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -348,7 +348,7 @@ async def run(args, fixture):
              else ("websocket_port", "rest_market_port", "rest_reference_port"))
     require(all(type(fixture.get(name)) is int and 1 <= fixture[name] <= 65535 for name in ports),
             "Invalid fixture service port")
-    args.schemas = Path(fixture.get("schemas", Path(__file__).resolve().parent))
+    args.schemas = Path(fixture.get("schemas", Path(__file__).resolve().parents[1]))
     schema = capnp.load(str(args.schemas / "strategy.capnp"))
     tracker = OrderTracker(schema, args.verbose)
     operation = tcp_check if args.transport == "tcp" else websocket_check
