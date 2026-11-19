@@ -88,7 +88,7 @@ Change `timeInForce` from `ioc` to `day`:
 Change the limit price to move it away from the selected quote:
 
 ```python
-"orderType": {"limit": price * (0.99 if side == "buy" else 1.01)},
+"orderType": {"limit": price * (0.999 if side == "buy" else 1.001)},
 ```
 
 Since the order can rest when its limit price does not cross the market once it is placed, you will now be able to see how your order gradually filled once the market moves towards the order.
