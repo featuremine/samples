@@ -1,0 +1,499 @@
+# Copyright (c) 2026 Featuremine. All rights reserved.
+#
+# Featuremine Proprietary - Restricted Use.
+#
+# This file is not covered by the repository's MIT License.
+# Use, copying, and modification are permitted only for use with local
+# Featuremine Titan or Featuremine-owned hosted services. Retain this
+# license and all original notices. Sharing and redistribution require
+# prior written authorization from Featuremine.
+#
+# See LICENSE-RESTRICTED for the complete license terms.
+
+"""Exercise sample behavior with synthetic records and in-memory transports."""
+
+import asyncio
+from contextlib import redirect_stdout
+import importlib.util
+import io
+from itertools import count
+import json
+from pathlib import Path
+import queue
+import random
+import runpy
+import struct
+import sys
+import threading
+from types import ModuleType, SimpleNamespace
+import unittest
+from unittest.mock import Mock, patch
+
+import capnp
+import msgpack
+import websocket
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load(filename):
+    spec = importlib.util.spec_from_file_location(filename.replace("-", "_"), ROOT / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+tcp = load("tcp-strategy.py")
+ws = load("ws-strategy.py")
+with patch.dict(sys.modules, {"requests": ModuleType("requests")}):
+    sync = load("ws-strategy-sync.py")
+strategy = capnp.load(str(ROOT / "strategy.capnp"))
+reference = capnp.load(str(ROOT / "reference.capnp"))
+
+def packed(schema, fields):
+    message = schema.new_message()
+    message.from_dict(fields)
+    return message.to_bytes_packed()
+
+
+def execution(order, event="filled", sequence=1, cumulative=None, text=False):
+    quantity = order["quantity"] if cumulative is None else cumulative
+    data = {event: {"cumQty": str(quantity) if text else quantity}}
+    if event in ("filled", "partiallyFilled"):
+        data[event]["lastQuantity"] = str(order["quantity"]) if text else order["quantity"]
+    elif event not in ("correction", "bust", "status", "restated"):
+        data = {event: {"reason": "synthetic rejection"}}
+    return packed(strategy.ManagerMessage, {"seqnum": sequence, "message": {"sess": {"exec2" if text else "exec": {
+        "strgOrdID": order["strgOrdID"], "accountID": order["accountID"],
+        "securityId": order["securityId"], "venueID": order["venueID"],
+        "orderSide": order["orderSide"], "data": data,
+    }}}})
+
+
+def args():
+    return SimpleNamespace(schemas=ROOT, token="t" * 256, host="localhost", port=1,
+                           market_port=2, reference_port=3, timeout=2, tls=False)
+
+
+def records():
+    """Include both rich equity metadata and an instrument without those fields."""
+    return {
+        "accounts": [{"message": {"account": {"identifier": 1}}}],
+        "venues": [{"message": {"venue": {"identifier": 1}}}],
+        "securities": [
+            {"message": {"securityDefinition": {"identifier": 1, "symbol": "TEST-A",
+                "assetClass": {"equity": {"isin": "TEST-ISIN", "sedol": "TEST-SEDOL"}},
+                "bloombergId": "TEST-BBG", "compositeFigi": "TEST-FIGI"}}},
+            {"message": {"securityDefinition": {"identifier": 2, "symbol": "TEST-B",
+                "assetClass": {"cryptoPair": {}}}}},
+            {"message": {"securityDefinition": {"identifier": 3, "symbol": "TEST-C",
+                "assetClass": {"cryptoPair": {}}}}},
+        ],
+        "venueSecurityAttributes": [{"message": {"venueSecurityAttribute": {
+            "securityId": security, "venueID": 1}}} for security in (1, 2, 3)],
+        "venueAccountMappings": [{"message": {"venueAccountMapping": {"identifier": 1, "venueID": 1}}}],
+        "positions": [{"message": {"position": {"accountId": 1, "securityId": 1, "quantity": 1}}}],
+    }
+
+
+class QuoteTests(unittest.TestCase):
+    def test_both_sides_use_the_opposite_quote_and_matching_size(self):
+        for module in (tcp, ws):
+            self.assertEqual(module.usable_quotes({22: 99, 730: 4, 25: 100, 735: 0.4}),
+                             [("buy", 100, 0.4), ("sell", 99, 1.0)])
+
+    def test_unusable_side_does_not_hide_a_usable_side(self):
+        for module in (tcp, ws):
+            for bad in (None, "bad", float("nan"), float("inf"), 0, -1):
+                self.assertEqual(module.usable_quotes({22: 99, 730: 0.5, 25: bad, 735: 1}),
+                                 [("sell", 99, 0.5)])
+                self.assertEqual(module.usable_quotes({22: bad, 730: 1, 25: 100, 735: 0.5}),
+                                 [("buy", 100, 0.5)])
+                self.assertEqual(module.usable_quotes({25: 100, 735: bad}), [])
+            self.assertEqual(module.usable_quotes({}), [])
+            self.assertEqual(module.usable_quotes({25: 100}), [])
+
+    def test_rest_requests_all_four_fields_and_preserves_missing_values(self):
+        with patch.object(ws, "request", return_value=b"1 22 99 25 100 730 1 735 N/A\n2 N/A\n") as request:
+            prices = ws.price_data(args(), {2, 1})
+        self.assertEqual(request.call_args.args[3], b"22 25 730 735\n1 2\n")
+        self.assertEqual(prices, {1: {22: 99, 25: 100, 730: 1}})
+
+    def test_reference_reader_accepts_rich_and_minimal_metadata(self):
+        fixture = records()
+        with patch.object(ws, "request", side_effect=lambda _, port, path:
+                          json.dumps(fixture[path.lstrip("/")]).encode()):
+            securities, accounts, mappings, attributes, positions = ws.reference_data(args())
+        self.assertEqual(set(securities), {1, 2, 3})
+        self.assertEqual(accounts, {1})
+        self.assertEqual(mappings, {(1, 1)})
+        self.assertEqual(attributes, {(1, 1), (2, 1), (3, 1)})
+        self.assertEqual(positions, {(1, 1): 1})
+
+
+class PositionRecoveryTests(unittest.TestCase):
+    def test_cumulative_replay_and_live_updates_include_corrections(self):
+        order = {"strgOrdID": 99, "accountID": 1, "securityId": 1,
+                 "venueID": 1, "orderSide": "buy", "quantity": 1}
+        events = (("partiallyFilled", 0.25), ("partiallyFilled", 0.25),
+                  ("filled", 0.75), ("correction", 0.5), ("bust", 0.125),
+                  ("status", 0.25), ("restated", 0.5))
+        for module in (tcp, ws, sync):
+            for text in (False, True):
+                with self.subTest(module=module.__name__, text=text):
+                    positions, order_fills = {(1, 1): 5}, {}
+                    for event, cumulative in events:
+                        message = strategy.ManagerMessage.from_bytes_packed(
+                            execution(order, event, cumulative=cumulative, text=text))
+                        report = getattr(message.message.sess, "exec2" if text else "exec")
+                        module.update_position(report, positions, order_fills)
+                        self.assertEqual(positions[1, 1], 5 + cumulative)
+
+    def test_sells_and_separate_accounts_and_securities(self):
+        for module in (tcp, ws, sync):
+            positions, order_fills = {(1, 1): 2}, {}
+            for account, security, side in ((1, 1, "sell"), (2, 1, "sellShort"), (1, 2, "buy")):
+                order = {"strgOrdID": 99, "accountID": account, "securityId": security,
+                         "venueID": 1, "orderSide": side, "quantity": 0.75}
+                message = strategy.ManagerMessage.from_bytes_packed(execution(order))
+                module.update_position(message.message.sess.exec, positions, order_fills)
+            self.assertEqual(positions, {(1, 1): 1.25, (2, 1): -0.75, (1, 2): 0.75})
+
+    def test_invalid_execution_quantities_do_not_change_positions(self):
+        order = {"strgOrdID": 99, "accountID": 1, "securityId": 1,
+                 "venueID": 1, "orderSide": "buy", "quantity": 1}
+        for module in (tcp, ws, sync):
+            for quantity in ("bad", "nan", "inf", "-1"):
+                message = strategy.ManagerMessage.from_bytes_packed(
+                    execution(order, cumulative=quantity, text=True))
+                positions, order_fills = {(1, 1): 5}, {}
+                with self.assertRaisesRegex(RuntimeError, "Invalid cumulative execution quantity"):
+                    module.update_position(message.message.sess.exec2, positions, order_fills)
+                self.assertEqual(positions, {(1, 1): 5})
+                self.assertEqual(order_fills, {})
+
+
+class TimeoutTests(unittest.TestCase):
+    def test_expired_deadlines_and_control_frames_cannot_extend_waits(self):
+        for module in (tcp, ws, sync):
+            clock = module if module is sync else module.time
+            with patch.object(clock, "monotonic", return_value=20):
+                with self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+                    module.remaining_time(20)
+        for module in (ws, sync):
+            clock = module if module is sync else module.time
+            connection = SimpleNamespace(settimeout=Mock(), recv_data=Mock(
+                return_value=(websocket.ABNF.OPCODE_PING, b"")))
+            with patch.object(clock, "monotonic", side_effect=(10, 20)):
+                with self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+                    module.receive(connection, 15)
+            self.assertEqual(connection.recv_data.call_count, 1)
+
+    def test_invalid_timeouts_fail_before_async_connections(self):
+        for module in (tcp, ws):
+            for timeout in (0, -1, float("nan"), float("inf")):
+                settings = args()
+                settings.timeout = timeout
+                with patch.object(tcp.asyncio, "open_connection") as tcp_connect, \
+                        patch.object(ws.websocket, "create_connection") as ws_connect:
+                    with self.assertRaisesRegex(ValueError, "Timeout must be positive and finite"):
+                        asyncio.run(module.main(settings))
+                    tcp_connect.assert_not_called()
+                    ws_connect.assert_not_called()
+
+
+class TcpWriter:
+    def __init__(self, reader):
+        self.reader = reader
+        self.orders = []
+
+    def write(self, data):
+        if len(data) == 280:
+            return
+        _, kind, _, _, _, _ = tcp.HEADER.unpack(data[:tcp.HEADER.size])
+        if kind == tcp.MANAGER_MESSAGE:
+            order = strategy.ManagerMessage.from_bytes_packed(data[tcp.HEADER.size:]).message.strg.new.to_dict()
+            self.orders.append(order)
+            # Reply immediately, before drain or the rest of the batch.
+            self.reader.feed_data(tcp.frame(tcp.MANAGER_MESSAGE, execution(order), len(self.orders), 0, 9))
+
+    async def drain(self):
+        await asyncio.sleep(0)
+
+    def close(self):
+        pass
+
+    async def wait_closed(self):
+        pass
+
+
+class TcpStrategyTests(unittest.TestCase):
+    def test_startup_budget_bounds_handshake_and_replay(self):
+        async def exercise(stage):
+            readers = [asyncio.StreamReader(), asyncio.StreamReader()]
+            writers = [TcpWriter(reader) for reader in readers]
+            if stage == "replay":
+                hello = tcp.HANDSHAKE.pack(tcp.MAGIC, 1, 0, 11, 16)
+                for reader in readers:
+                    reader.feed_data(hello + struct.pack("<QQ", 0, 1))
+            settings = args()
+            settings.timeout = 0.05
+            with patch.object(tcp.asyncio, "open_connection", side_effect=list(zip(readers, writers))):
+                await asyncio.wait_for(tcp.main(settings), 1)
+        for stage in ("handshake", "replay"):
+            with self.subTest(stage=stage), self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+                asyncio.run(exercise(stage))
+
+    def test_batch_uses_both_sides_and_processes_immediate_replies(self):
+        async def exercise():
+            orders_reader, market_reader = asyncio.StreamReader(), asyncio.StreamReader()
+            orders_writer, market_writer = TcpWriter(orders_reader), TcpWriter(market_reader)
+            snapshots = []
+            def add(kind, schema, field):
+                snapshots.append(tcp.frame(kind, packed(schema, {"message": field}), len(snapshots) + 1, 0))
+            add(tcp.SYMBOLOGY, reference.Symbology, {"securityDefinition": {"identifier": 1, "symbol": "TEST"}})
+            add(tcp.SYMBOLOGY, reference.Symbology, {"riskChannel": {"referenceId": 1, "channelName": "quotes/test"}})
+            add(tcp.VENUE_DATA, reference.VenueData, {"venueSecurityAttribute": {"securityId": 1, "venueID": 1}})
+            for account in (1, 2):
+                add(tcp.RISK_DATA, reference.RiskData, {"account": {"identifier": account}})
+                add(tcp.VENUE_DATA, reference.VenueData, {"venueAccountMapping": {"identifier": account, "venueID": 1}})
+            history = execution({"strgOrdID": 99, "accountID": 1, "securityId": 1,
+                                 "venueID": 1, "orderSide": "buy", "quantity": 0.5})
+            snapshots.append(tcp.frame(tcp.MANAGER_MESSAGE, history, len(snapshots) + 1, 0))
+            # A later reference seed must preserve fills already recovered.
+            for _ in range(2):
+                add(tcp.RISK_DATA, reference.RiskData,
+                    {"position": {"accountId": 1, "securityId": 1, "quantity": 2}})
+            hello = tcp.HANDSHAKE.pack(tcp.MAGIC, 1, 0, 11, 16)
+            orders_reader.feed_data(hello + struct.pack("<QQ", 0, len(snapshots)) + b"".join(snapshots))
+            fields = {22: 99, 730: 4, 25: 100, 735: 0.4}
+            payload = b"".join(msgpack.packb(value) for pair in fields.items() for value in pair)
+            market_reader.feed_data(hello + struct.pack("<QQ", 0, 1)
+                + tcp.frame(tcp.STREAM_ANNOUNCEMENT, b"fixture:quotes/test", 0, 0, 1)
+                + tcp.frame(tcp.FMTRON, payload, 1, 0, 1))
+            choices = iter((0, 1))
+            with patch.object(tcp.asyncio, "open_connection", side_effect=[
+                    (orders_reader, orders_writer), (market_reader, market_writer)]), \
+                    patch.object(random, "choice", side_effect=lambda values: values[next(choices)]), \
+                    patch.object(tcp.time, "time_ns", side_effect=count(100)), \
+                    patch.object(tcp, "update_position", wraps=tcp.update_position) as update:
+                await asyncio.wait_for(tcp.main(args()), 3)
+            return orders_writer.orders, update.call_args.args[1]
+        with redirect_stdout(io.StringIO()) as output:
+            orders, positions = asyncio.run(exercise())
+        self.assertEqual([order["orderSide"] for order in orders], ["buy", "sell"])
+        self.assertEqual([order["orderType"]["limit"] for order in orders], [100, 99])
+        self.assertEqual([order["quantity"] for order in orders], [0.4, 1])
+        self.assertEqual(len({order["strgOrdID"] for order in orders}), 2)
+        self.assertTrue(all(order["timeInForce"] == "ioc" for order in orders))
+        self.assertAlmostEqual(positions[1, 1], 2.9)
+        self.assertEqual(positions[2, 1], -1)
+        self.assertIn("Done", output.getvalue())
+
+
+class WebSocketFixture:
+    def __init__(self, history=()):
+        self.messages = queue.Queue()
+        self.orders = []
+        self.messages.put((websocket.ABNF.OPCODE_TEXT,
+                           json.dumps({"received": len(history), "pending": len(history)}), None))
+        for message in history:
+            self.messages.put((websocket.ABNF.OPCODE_BINARY, message, None))
+
+    def recv_data(self, control_frame=True):
+        item = self.messages.get(timeout=3)
+        if isinstance(item, Exception):
+            raise item
+        opcode, payload, consumed = item
+        if consumed is not None:
+            consumed.set()
+        return opcode, payload
+
+    def settimeout(self, timeout):
+        pass
+
+    def send(self, payload, opcode):
+        order = strategy.ManagerMessage.from_bytes_packed(payload).message.strg.new.to_dict()
+        self.orders.append(order)
+        consumed = threading.Event()
+        self.messages.put((websocket.ABNF.OPCODE_BINARY, execution(order), consumed))
+        if not consumed.wait(2):
+            raise RuntimeError("Fixture reply was not received during batch sending")
+
+    def abort(self):
+        self.messages.put(RuntimeError("Fixture closed"))
+
+    def close(self):
+        pass
+
+
+class WebSocketStrategyTests(unittest.TestCase):
+    def test_connection_is_closed_if_startup_expires_after_setup(self):
+        connection = WebSocketFixture()
+        connection.abort = Mock(wraps=connection.abort)
+        connection.close = Mock()
+        with patch.object(ws.websocket, "create_connection", return_value=connection), \
+                patch.object(ws, "remaining_time", side_effect=(1, RuntimeError("Operation timed out"))), \
+                self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+            asyncio.run(ws.main(args()))
+        connection.abort.assert_called_once()
+        connection.close.assert_called_once()
+
+    def test_successive_rest_requests_share_the_startup_budget(self):
+        fixture = records()
+        settings = args()
+        settings.deadline = 20
+        def response(request, timeout):
+            route = request.full_url.rsplit("/", 1)[1]
+            return io.BytesIO(json.dumps(fixture[route]).encode())
+        with patch.object(ws.urllib.request, "urlopen", side_effect=response) as request, \
+                patch.object(ws.time, "monotonic", side_effect=(10, 12, 14, 16, 18, 20)):
+            ws.reference_data(settings)
+            with self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+                ws.request(settings, settings.reference_port, "/accounts")
+        self.assertEqual([call.kwargs["timeout"] for call in request.call_args_list], [10, 8, 6, 4, 2])
+
+    def test_startup_budget_bounds_recovery_and_batch_sending(self):
+        for stage in ("recovery", "send"):
+            connection = WebSocketFixture()
+            released = threading.Event()
+            original_abort = connection.abort
+            def abort():
+                released.set()
+                original_abort()
+            connection.abort = abort
+            if stage == "recovery":
+                connection.messages.get_nowait()
+            else:
+                connection.send = lambda *arguments: released.wait(2)
+            settings = args()
+            settings.timeout = 0.05
+            reference_data = ({1: "TEST"}, {1}, {(1, 1)}, {(1, 1)}, {})
+            prices = {1: {22: 99, 730: 4}}
+            with patch.object(ws.websocket, "create_connection", return_value=connection), \
+                    patch.object(ws, "reference_data", return_value=reference_data), \
+                    patch.object(ws, "price_data", return_value=prices), \
+                    self.subTest(stage=stage), self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+                asyncio.run(asyncio.wait_for(ws.main(settings), 1))
+            self.assertTrue(released.is_set())
+
+    def test_both_sides_and_replies_arriving_before_batch_send_finishes(self):
+        history = execution({"strgOrdID": 99, "accountID": 1, "securityId": 1,
+                             "venueID": 1, "orderSide": "buy", "quantity": 0.5})
+        connection = WebSocketFixture((history,))
+        reference_data = ({1: "TEST"}, {1, 2}, {(1, 1), (2, 1)}, {(1, 1)}, {(1, 1): 2})
+        prices = {1: {22: 99, 730: 4, 25: 100, 735: 0.4}}
+        choices = iter((0, 1))
+        with patch.object(ws.websocket, "create_connection", return_value=connection), \
+                patch.object(ws, "reference_data", return_value=reference_data), \
+                patch.object(ws, "price_data", side_effect=[None, prices]), \
+                patch.object(random, "choice", side_effect=lambda values: values[next(choices)]), \
+                patch.object(ws.time, "time_ns", side_effect=count(100)), \
+                patch.object(ws, "update_position", wraps=ws.update_position) as update, \
+                redirect_stdout(io.StringIO()) as output:
+            asyncio.run(asyncio.wait_for(ws.main(args()), 5))
+        self.assertEqual([order["orderSide"] for order in connection.orders], ["buy", "sell"])
+        self.assertEqual([order["orderType"]["limit"] for order in connection.orders], [100, 99])
+        self.assertEqual([order["quantity"] for order in connection.orders], [0.4, 1])
+        self.assertEqual(len({order["strgOrdID"] for order in connection.orders}), 2)
+        self.assertTrue(all(order["timeInForce"] == "ioc" for order in connection.orders))
+        self.assertAlmostEqual(update.call_args.args[1][1, 1], 2.9)
+        self.assertEqual(update.call_args.args[1][2, 1], -1)
+        self.assertIn("Done", output.getvalue())
+
+
+class SynchronousStrategyTests(unittest.TestCase):
+    def exercise(self, prices="1 22 99 25 100 730 4 735 0.4\n2 22 50 730 4\n3 N/A\n",
+                 timeout=2, complete=True):
+        fixture = records()
+        sent = []
+        history = execution({"strgOrdID": 99, "accountID": 1, "securityId": 1,
+                             "venueID": 1, "orderSide": "buy", "quantity": 1})
+        incoming = [json.dumps({"received": 1, "pending": 1}), history]
+        class Response:
+            def __init__(self, body):
+                self.body = body
+                self.text = body if isinstance(body, str) else json.dumps(body)
+            def json(self):
+                return self.body
+            def raise_for_status(self):
+                pass
+        def get(url, **kwargs):
+            self.assertGreater(kwargs["timeout"], 0)
+            self.assertLessEqual(kwargs["timeout"], timeout)
+            if url.endswith("/api/prices"):
+                self.assertTrue(kwargs["data"].startswith("22 25 730 735\n"))
+            return Response(prices if url.endswith("/api/prices") else fixture[url.rsplit("/", 1)[1]])
+        def send(payload, opcode):
+            order = strategy.ManagerMessage.from_bytes_packed(payload).message.strg.new.to_dict()
+            sent.append(order)
+            incoming.append(packed(strategy.ManagerMessage, {"message": {"ctrl": {
+                "placeForwarded": {"strgOrdID": order["strgOrdID"]}}}}))
+            incoming.append(execution(order, "partiallyFilled"))
+            if complete:
+                incoming.append(execution(order, "filled" if len(sent) == 1 else "canceled"))
+        def receive(control_frame=True):
+            message = incoming.pop(0) if incoming else execution(sent[-1], "partiallyFilled")
+            opcode = websocket.ABNF.OPCODE_TEXT if isinstance(message, str) else websocket.ABNF.OPCODE_BINARY
+            return opcode, message
+        connection = SimpleNamespace(recv_data=receive, settimeout=lambda value: None,
+                                     send=send, close=lambda: None)
+        requests = ModuleType("requests")
+        requests.Response = Response
+        requests.get = get
+        with patch.dict(sys.modules, {"requests": requests}), \
+                patch.object(sys, "argv", ["ws-strategy-sync.py", "--token", "t" * 256,
+                                           "--timeout", str(timeout)]), \
+                patch.object(websocket, "create_connection", return_value=connection), \
+                patch.object(random, "choice", side_effect=lambda values: values[0]), \
+                patch("time.time_ns", side_effect=[100, 101]), redirect_stdout(io.StringIO()) as output:
+            self.output = output
+            state = runpy.run_path(str(ROOT / "ws-strategy-sync.py"), run_name="__main__")
+        self.assertEqual(incoming, [])
+        return sent, output.getvalue(), state["positions"]
+
+    def test_quotes_ignore_position_sizing_and_wait_for_terminal_responses(self):
+        orders, output, positions = self.exercise()
+        self.assertEqual([order["securityId"] for order in orders], [1, 2])
+        self.assertEqual([order["orderSide"] for order in orders], ["buy", "sell"])
+        self.assertEqual([order["quantity"] for order in orders], [0.4, 1])
+        self.assertEqual([order["orderType"]["limit"] for order in orders], [100, 50])
+        self.assertTrue(all(order["timeInForce"] == "ioc" for order in orders))
+        self.assertIn("Placed 2 orders using live prices", output)
+        self.assertIn("Order update: partiallyFilled", output)
+        self.assertIn("Order update: filled", output)
+        self.assertIn("Order update: canceled", output)
+        self.assertAlmostEqual(positions[1, 1], 2.4)
+        self.assertEqual(positions[1, 2], -1)
+        self.assertIn("Done", output)
+
+    def test_invalid_sides_preserve_the_other_executable_side(self):
+        for bad in ("N/A", "nan", "inf", "0", "-1"):
+            for prices in (f"1 22 99 730 0.5 25 {bad} 735 1\n",
+                           f"1 22 99 730 0.5 25 100 735 {bad}\n"):
+                with self.subTest(prices=prices):
+                    orders, _, _ = self.exercise(prices=prices)
+                    self.assertEqual(len(orders), 1)
+                    self.assertEqual(orders[0]["orderSide"], "sell")
+                    self.assertEqual(orders[0]["orderType"]["limit"], 99)
+                    self.assertEqual(orders[0]["quantity"], 0.5)
+
+    def test_missing_sizes_do_not_produce_orders(self):
+        with self.assertRaisesRegex(RuntimeError, "Unable to find valid combinations"):
+            self.exercise(prices="1 22 99 25 100\n2 N/A\n3 N/A\n")
+
+    def test_partial_replies_cannot_restart_the_response_budget(self):
+        with self.assertRaisesRegex(RuntimeError, "Operation timed out"):
+            self.exercise(timeout=0.05, complete=False)
+        self.assertIn("Placed 2 orders using live prices", self.output.getvalue())
+
+    def test_invalid_timeouts_fail_before_requests(self):
+        for timeout in (0, -1, float("nan"), float("inf")):
+            with self.subTest(timeout=timeout), self.assertRaisesRegex(
+                    ValueError, "Timeout must be positive and finite"):
+                self.exercise(timeout=timeout)
+
+
+if __name__ == "__main__":
+    unittest.main()

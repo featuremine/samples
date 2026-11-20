@@ -1,0 +1,58 @@
+# Featuremine Proprietary License - All Rights Reserved
+
+Copyright (c) 2026 Featuremine. All rights reserved.
+
+## 1. Scope
+
+This license applies to all files explicitly designated as subject to this Featuremine Proprietary License ("Restricted Materials"), including applicable schema definitions, strategy files, and associated materials.
+
+The Restricted Materials are proprietary to Featuremine and are expressly excluded from the MIT License applicable to other parts of this repository.
+
+## 2. Permitted Use
+
+For the purposes of this license, "Permitted Environments" means Featuremine Titan running locally or hosted services owned by Featuremine.
+
+Permission is granted to use, execute, copy, and modify the Restricted Materials solely for use with Permitted Environments, including developing, testing, maintaining, or operating software for use with those environments. No separate written authorization is required for these permitted activities.
+
+Original and modified versions of the Restricted Materials must remain subject to this license and retain all original copyright, license, ownership, and proprietary notices. Modified versions may be used only for the same permitted purposes and must not be relicensed under terms that grant broader rights.
+
+This license does not independently authorize access to Featuremine products or services. Use of Permitted Environments remains subject to applicable Featuremine terms, agreements, and access requirements.
+
+All rights not expressly granted by this license are reserved by Featuremine.
+
+## 3. Restrictions
+
+Except as expressly permitted by this license or otherwise authorized in writing by Featuremine, the following activities are prohibited:
+
+- Using or executing the Restricted Materials for purposes other than use with Permitted Environments.
+- Copying, modifying, adapting, or creating derivative works from the Restricted Materials for purposes unrelated to use with Permitted Environments.
+- Redistributing, publishing, sharing, selling, sublicensing, or transferring the Restricted Materials, whether modified or unmodified.
+- Incorporating the Restricted Materials into software, products, services, or systems for purposes unrelated to use with Permitted Environments.
+- Relicensing the Restricted Materials or modified versions under terms that grant broader rights than this license.
+- Removing or altering copyright, ownership, or proprietary notices.
+
+These restrictions apply to both original and modified versions of the Restricted Materials, except to the extent expressly authorized by Featuremine or permitted by applicable law.
+
+## 4. Sharing and Redistribution
+
+Sharing, redistribution, publication, sale, sublicensing, or transfer of the Restricted Materials, whether modified or unmodified, requires prior explicit written authorization from Featuremine. The permission to use, copy, and modify under section 2 does not grant these rights.
+
+Such authorization must be issued by an authorized Featuremine representative and must specify or clearly identify the permitted activities and their scope.
+
+Any authorization is limited to its expressly permitted scope and does not grant additional rights, including redistribution or sublicensing rights, unless explicitly stated.
+
+## 5. Ownership
+
+All rights, title, and interest in the original Restricted Materials remain with Featuremine or their respective rights holders.
+
+No intellectual property rights are transferred under this license.
+
+## 6. Separate Agreements
+
+Where a separate written agreement with Featuremine expressly grants rights concerning the Restricted Materials, that agreement governs those rights to the extent of any conflict with this license.
+
+## 7. Disclaimer
+
+THE RESTRICTED MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, FEATUREMINE SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE RESTRICTED MATERIALS.
